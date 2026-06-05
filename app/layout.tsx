@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, Jost } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { AgeGate } from "@/components/layout/AgeGate";
 
@@ -19,6 +20,7 @@ const body = Jost({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.nosterramezcal.com"),
   title: "NOSTERRA Mezcal · Joven Cristalino de Santiago Matatlán, Oaxaca",
   description:
     "Mezcal artesanal oaxaqueño de Casa Jiménez Elixirs & Spirits. Agave Espadín, tahona de piedra y alambique de cobre. La distancia puede separar caminos… pero nunca nuestras raíces.",
@@ -34,8 +36,16 @@ export const metadata: Metadata = {
     title: "NOSTERRA Mezcal",
     description:
       "Mezcal artesanal oaxaqueño. El espíritu de nuestra tierra, en cada gota.",
+    url: "https://www.nosterramezcal.com",
+    siteName: "NOSTERRA Mezcal",
     type: "website",
     locale: "es_MX",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "NOSTERRA Mezcal",
+    description:
+      "Mezcal artesanal oaxaqueño. El espíritu de nuestra tierra, en cada gota.",
   },
 };
 
@@ -50,6 +60,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-obsidian text-ivory font-body">
         <AgeGate />
         {children}
+        <Analytics />
       </body>
     </html>
   );
