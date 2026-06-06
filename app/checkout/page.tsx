@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ShoppingBag, ShieldCheck, Truck, CreditCard, Minus, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ShoppingBag, ShieldCheck, Truck, CreditCard, Minus, Plus, Trash2, Gift, Sparkles } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
 import { useStoreSettings } from "@/hooks/useStoreSettings";
 import { formatMXN } from "@/lib/store-config";
@@ -309,8 +309,9 @@ export default function CheckoutPage() {
               ))}
             </ul>
 
-            <Link href="/#tienda" className="mt-4 flex items-center justify-center gap-1.5 border border-gold/20 py-2.5 font-body text-[11px] uppercase tracking-[0.15em] text-gold/80 transition-colors hover:border-gold hover:text-gold">
-              <Plus className="h-3.5 w-3.5" /> Agregar otro producto
+            <Link href="/#tienda" className="group mt-4 flex items-center justify-center gap-2 rounded-xl border border-gold/40 bg-gold/10 py-3.5 font-body text-sm font-medium uppercase tracking-[0.12em] text-gold transition-all hover:bg-gold hover:text-obsidian hover:shadow-lg hover:shadow-gold/25">
+              <Plus className="h-4 w-4 transition-transform group-hover:rotate-90" />
+              Agregar otro mezcal
             </Link>
             <div className="mt-5 space-y-2 border-t border-gold/10 pt-5 font-body text-sm">
               <div className="flex justify-between text-muted">
@@ -330,13 +331,32 @@ export default function CheckoutPage() {
 
             {/* Incentivo de envío gratis */}
             {!freeShip && shippingCost > 0 && (
-              <p className="mt-3 rounded-lg border border-gold/15 bg-gold/5 px-3 py-2 font-body text-[11px] text-gold/90">
-                Agrega {formatMXN(settings.freeShippingFrom - subtotalAmount)} más y tu envío es <strong>GRATIS</strong> 🎉
-              </p>
+              <div className="animate-glow shimmer-gold relative mt-4 overflow-hidden rounded-xl border border-gold/50 bg-gradient-to-r from-gold/20 via-copper/15 to-gold/20 px-4 py-4 text-center">
+                <p className="flex items-center justify-center gap-2 font-body text-sm text-ivory">
+                  <Gift className="h-5 w-5 text-gold-light" />
+                  Te falta poco para
+                </p>
+                <p className="mt-1 font-display text-2xl font-semibold leading-tight text-gold-light">
+                  Agrega {formatMXN(settings.freeShippingFrom - subtotalAmount)}
+                </p>
+                <p className="font-body text-sm text-ivory">
+                  y tu <span className="font-bold uppercase tracking-wide text-gold-light">envío es gratis</span> 🎉
+                </p>
+              </div>
             )}
 
-            <p className="mt-4 flex items-center gap-1.5 font-body text-[11px] text-muted/70">
-              <Truck className="h-3.5 w-3.5 text-gold" /> {settings.shippingNote}
+            {/* Envío gratis ya alcanzado */}
+            {freeShip && (
+              <div className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-agave-light/40 bg-agave/25 px-4 py-3.5 text-center">
+                <Sparkles className="h-5 w-5 text-agave-light" />
+                <p className="font-display text-lg font-semibold text-agave-light">
+                  ¡Felicidades! Tu envío es GRATIS
+                </p>
+              </div>
+            )}
+
+            <p className="mt-5 flex items-center justify-center gap-2 rounded-lg bg-obsidian/40 py-2.5 font-body text-sm font-medium text-ivory/90">
+              <Truck className="h-4 w-4 text-gold" /> {settings.shippingNote}
             </p>
           </aside>
         </div>

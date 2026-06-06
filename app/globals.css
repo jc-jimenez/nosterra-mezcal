@@ -110,4 +110,44 @@ h1, h2, h3, h4 {
   .font-body {
     font-family: var(--font-body);
   }
+
+  /* Glow dorado pulsante (banner de envío gratis) */
+  .animate-glow {
+    animation: nosterra-glow 2.2s ease-in-out infinite;
+  }
+
+  /* Brillo deslizante encima de un elemento */
+  .shimmer-gold::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      110deg,
+      transparent 25%,
+      rgba(226, 200, 138, 0.28) 50%,
+      transparent 75%
+    );
+    background-size: 220% 100%;
+    animation: nosterra-shimmer 2.8s linear infinite;
+    pointer-events: none;
+  }
+}
+
+@keyframes nosterra-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(200, 169, 110, 0);
+  }
+  50% {
+    box-shadow: 0 0 22px 1px rgba(200, 169, 110, 0.4);
+  }
+}
+
+@keyframes nosterra-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
