@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ShoppingBag } from "lucide-react";
+import { ShoppingBag, Crown } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
 
 const links = [
@@ -49,7 +49,7 @@ export function Navbar() {
         </Link>
 
         {/* Desktop links */}
-        <div className="hidden items-center gap-9 md:flex">
+        <div className="hidden items-center gap-8 md:flex">
           {links.map((l) => (
             <Link
               key={l.href}
@@ -59,6 +59,14 @@ export function Navbar() {
               {l.label}
             </Link>
           ))}
+          {/* Embajadores — destacado */}
+          <Link
+            href="/embajadores"
+            className="animate-glow group flex items-center gap-1.5 rounded-full border border-gold/50 bg-gradient-to-r from-gold/20 via-copper/15 to-gold/20 px-4 py-1.5 font-body text-xs font-medium uppercase tracking-[0.15em] text-gold-light transition-all hover:from-gold hover:via-gold hover:to-gold hover:text-obsidian"
+          >
+            <Crown className="h-3.5 w-3.5 transition-transform group-hover:scale-110" />
+            Sé Embajador
+          </Link>
         </div>
 
         <div className="flex items-center gap-4">
@@ -111,9 +119,16 @@ export function Navbar() {
               </Link>
             ))}
             <Link
+              href="/embajadores"
+              onClick={() => setOpen(false)}
+              className="mt-2 flex items-center justify-center gap-2 rounded-full border border-gold/50 bg-gradient-to-r from-gold/20 to-copper/15 px-5 py-3 text-center font-body text-sm font-medium uppercase tracking-[0.15em] text-gold-light"
+            >
+              <Crown className="h-4 w-4" /> Sé Embajador
+            </Link>
+            <Link
               href="#tienda"
               onClick={() => setOpen(false)}
-              className="mt-2 border border-gold/60 px-5 py-3 text-center font-body text-sm uppercase tracking-[0.18em] text-gold"
+              className="border border-gold/60 px-5 py-3 text-center font-body text-sm uppercase tracking-[0.18em] text-gold"
             >
               Comprar
             </Link>
