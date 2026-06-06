@@ -21,6 +21,10 @@ function commissionForTier(tier: "normal" | "plata" | "oro", cfg: typeof DEFAULT
   return cfg.tierNormal;
 }
 
+function genPin(): string {
+  return String(Math.floor(100000 + Math.random() * 900000)); // 6 dígitos
+}
+
 function baseCode(name: string): string {
   const w = name.trim().split(/\s+/)[0]?.toUpperCase().replace(/[^A-Z0-9]/g, "") ?? "";
   return (w || "AMIGO").slice(0, 8);
@@ -48,10 +52,12 @@ export const apply = mutation({
     }
     const cfg = await getTierConfig(ctx);
     const code = await uniqueCode(ctx, name);
+    const pin = genPin();
     await ctx.db.insert("ambassadors", {
       name: name.trim(),
       email: mail,
       code,
+      pin,
       tier: "normal",
       commissionPct: cfg.tierNormal,
       customerDiscountPct: cfg.customerDiscount,
@@ -61,24 +67,53 @@ export const apply = mutation({
       isActive: false,
       status: "pending",
     });
-    return { ok: true as const, alreadyExists: false, code, status: "pending" as const };
+    return { ok: true as const, alreadyExists: false, code, pin, status: "pending" as const };
   },
 });
 
-// Consulta del propio embajador por email (su panel ligero)
-export const getByEmail = query({
-  args: { email: v.string() },
-  handler: async (ctx, { email }) => {
+// Panel del embajador — requiere email + PIN
+export const getAccount = query({
+  args: { email: v.string(), pin: v.string() },
+  handler: async (ctx, { email, pin }) => {
     const a = await ctx.db
       .query("ambassadors")
       .withIndex("by_email", (q) => q.eq("email", email.trim().toLowerCase()))
       .unique();
-    if (!a) return null;
+    if (!a || !a.pin || a.pin !== pin.trim()) return null;
     return {
       name: a.name, code: a.code, tier: a.tier, status: a.status, isActive: a.isActive,
       commissionPct: a.commissionPct, customerDiscountPct: a.customerDiscountPct,
       accruedCommission: a.accruedCommission, paidCommission: a.paidCommission, salesCount: a.salesCount,
     };
+  },
+});
+
+// Canje de comisión por el propio embajador (email + PIN) → genera un cupón
+export const redeem = mutation({
+  args: { email: v.string(), pin: v.string() },
+  handler: async (ctx, { email, pin }) => {
+    const a = await ctx.db
+      .query("ambassadors")
+      .withIndex("by_email", (q) => q.eq("email", email.trim().toLowerCase()))
+      .unique();
+    if (!a || !a.pin || a.pin !== pin.trim()) return { ok: false as const, error: "Datos incorrectos" };
+    if (!a.isActive) return { ok: false as const, error: "Tu cuenta no está activa" };
+    const amount = Math.floor(a.accruedCommission);
+    if (amount <= 0) return { ok: false as const, error: "No tienes comisión por redimir" };
+
+    const code = `${a.code}-${Math.floor(Math.random() * 9000) + 1000}`;
+    await ctx.db.insert("coupons", {
+      code,
+      discountType: "fixed",
+      discountValue: amount,
+      minPurchase: 0,
+      maxUses: 1,
+      usedCount: 0,
+      isActive: true,
+      note: `Canje de comisión de ${a.name}`,
+    });
+    await ctx.db.patch(a._id, { paidCommission: a.paidCommission + amount, accruedCommission: 0 });
+    return { ok: true as const, code, amount };
   },
 });
 
@@ -125,9 +160,21 @@ export const approve = mutation({
     assertAdmin(adminKey);
     const a = await ctx.db.get(id);
     if (!a) throw new Error("Embajador no encontrado");
-    await ctx.db.patch(id, { status: "active", isActive: true });
+    const pin = a.pin ?? genPin();
+    await ctx.db.patch(id, { status: "active", isActive: true, pin });
     await createAmbassadorCoupon(ctx, id, a.code, a.customerDiscountPct, a.name);
-    return { code: a.code };
+    return { code: a.code, pin };
+  },
+});
+
+// Regenera el PIN de un embajador (admin)
+export const resetPin = mutation({
+  args: { adminKey: v.string(), id: v.id("ambassadors") },
+  handler: async (ctx, { adminKey, id }) => {
+    assertAdmin(adminKey);
+    const pin = genPin();
+    await ctx.db.patch(id, { pin });
+    return { pin };
   },
 });
 
@@ -157,10 +204,12 @@ export const adminCreate = mutation({
       code = await uniqueCode(ctx, name);
     }
 
+    const pin = genPin();
     const id = await ctx.db.insert("ambassadors", {
       name: name.trim(),
       email: mail,
       code,
+      pin,
       tier,
       commissionPct: commissionForTier(tier, cfg),
       customerDiscountPct: cfg.customerDiscount,
@@ -171,7 +220,7 @@ export const adminCreate = mutation({
       status: "active",
     });
     await createAmbassadorCoupon(ctx, id, code, cfg.customerDiscount, name.trim());
-    return { code };
+    return { code, pin };
   },
 });
 

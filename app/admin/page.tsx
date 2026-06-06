@@ -555,7 +555,14 @@ function AmbassadorsCard({ adminKey }: { adminKey: string }) {
   const payCommission = useMutation(api.ambassadors.payCommission);
   const remove = useMutation(api.ambassadors.remove);
   const adminCreate = useMutation(api.ambassadors.adminCreate);
+  const resetPin = useMutation(api.ambassadors.resetPin);
   const [payResult, setPayResult] = useState<{ name: string; code: string; amount: number } | null>(null);
+
+  async function doResetPin(a: NonNullable<typeof ambassadors>[number]) {
+    if (!confirm(`¿Regenerar el PIN de ${a.name}? El PIN anterior dejará de funcionar.`)) return;
+    const r = await resetPin({ adminKey, id: a._id });
+    alert(`Nuevo PIN de ${a.name}: ${r.pin}\nCompártelo con el embajador.`);
+  }
 
   // Alta manual
   const [showForm, setShowForm] = useState(false);
@@ -660,6 +667,7 @@ function AmbassadorsCard({ adminKey }: { adminKey: string }) {
               <tr className="text-left text-xs text-neutral-400 border-b border-neutral-100">
                 <th className="px-6 py-3 font-medium">Embajador</th>
                 <th className="px-4 py-3 font-medium">Código</th>
+                <th className="px-4 py-3 font-medium">PIN</th>
                 <th className="px-4 py-3 font-medium">Nivel</th>
                 <th className="px-4 py-3 font-medium">Ventas</th>
                 <th className="px-4 py-3 font-medium">Por pagar</th>
@@ -674,6 +682,10 @@ function AmbassadorsCard({ adminKey }: { adminKey: string }) {
                     <p className="text-xs text-neutral-500">{a.email}{a.status === "rejected" ? " · rechazado" : ""}</p>
                   </td>
                   <td className="px-4 py-3 font-mono text-neutral-800">{a.code}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span className="font-mono tracking-widest text-neutral-800">{a.pin ?? "—"}</span>
+                    <button onClick={() => doResetPin(a)} title="Regenerar PIN" className="ml-2 text-xs text-amber-600 hover:text-amber-700">↻</button>
+                  </td>
                   <td className="px-4 py-3">
                     <select
                       value={a.tier}

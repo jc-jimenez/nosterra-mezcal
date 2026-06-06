@@ -72,6 +72,7 @@ export default defineSchema({
     name: v.string(),
     email: v.string(),
     code: v.string(), // su código personal (también existe como cupón)
+    pin: v.optional(v.string()), // PIN para acceder a su panel y redimir
     tier: v.union(v.literal("normal"), v.literal("plata"), v.literal("oro")),
     commissionPct: v.number(), // % de comisión (según nivel, ajustable)
     customerDiscountPct: v.number(), // % de descuento que da a sus clientes

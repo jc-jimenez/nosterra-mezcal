@@ -62,30 +62,45 @@ function Hero() {
 
 function Apply() {
   const apply = useMutation(api.ambassadors.apply);
+  const redeem = useMutation(api.ambassadors.redeem);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<{ code: string; status: string; alreadyExists: boolean } | null>(null);
+  const [result, setResult] = useState<{ code: string; pin?: string; status: string; alreadyExists: boolean } | null>(null);
 
-  // Consulta de cuenta
+  // Acceso a la cuenta (email + PIN)
   const [lookupEmail, setLookupEmail] = useState("");
+  const [lookupPin, setLookupPin] = useState("");
   const [queryEmail, setQueryEmail] = useState("");
-  const account = useQuery(api.ambassadors.getByEmail, queryEmail ? { email: queryEmail } : "skip");
+  const [queryPin, setQueryPin] = useState("");
+  const account = useQuery(
+    api.ambassadors.getAccount,
+    queryEmail && queryPin ? { email: queryEmail, pin: queryPin } : "skip"
+  );
   const [copied, setCopied] = useState(false);
+  const [redeemResult, setRedeemResult] = useState<{ code: string; amount: number } | null>(null);
+  const [redeemErr, setRedeemErr] = useState("");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     try {
       const r = await apply({ name, email });
-      setResult({ code: r.code, status: r.status, alreadyExists: r.alreadyExists });
+      setResult({ code: r.code, pin: r.alreadyExists ? undefined : r.pin, status: r.status, alreadyExists: r.alreadyExists });
     } finally {
       setSubmitting(false);
     }
   }
 
-  function copyCode(code: string) {
-    navigator.clipboard?.writeText(code);
+  async function doRedeem() {
+    setRedeemErr("");
+    const r = await redeem({ email: queryEmail, pin: queryPin });
+    if (r.ok) setRedeemResult({ code: r.code, amount: r.amount });
+    else setRedeemErr(r.error);
+  }
+
+  function copyText(text: string) {
+    navigator.clipboard?.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
@@ -106,16 +121,23 @@ function Apply() {
               </p>
               <p className="mt-2 font-body text-sm text-muted">Tu código de embajador es:</p>
               <button
-                onClick={() => copyCode(result.code)}
+                onClick={() => copyText(result.code)}
                 className="mx-auto mt-3 flex items-center gap-2 rounded-xl border border-gold/40 bg-gold/10 px-6 py-3 font-mono text-2xl tracking-widest text-gold hover:bg-gold/20"
               >
                 {result.code}
                 {copied ? <Check className="h-5 w-5 text-emerald-400" /> : <Copy className="h-4 w-4 text-muted" />}
               </button>
+              {result.pin && (
+                <div className="mx-auto mt-4 max-w-xs rounded-xl border border-gold/20 bg-smoke px-4 py-3">
+                  <p className="font-body text-[11px] uppercase tracking-wide text-muted">Tu PIN (guárdalo)</p>
+                  <p className="font-mono text-2xl tracking-[0.3em] text-ivory">{result.pin}</p>
+                  <p className="mt-1 font-body text-[11px] text-muted/70">Lo necesitas para entrar a tu cuenta y redimir comisiones.</p>
+                </div>
+              )}
               <p className="mt-4 font-body text-xs leading-relaxed text-muted">
                 {result.status === "active"
                   ? "Tu código ya está activo. ¡Compártelo y empieza a ganar!"
-                  : "Tu cuenta está en revisión. En cuanto te aprobemos, tu código quedará activo y podrás compartirlo."}
+                  : "Tu cuenta está en revisión. En cuanto te aprobemos, tu código quedará activo."}
               </p>
             </div>
           ) : (
@@ -126,31 +148,28 @@ function Apply() {
                 {submitting ? "Enviando…" : "Postularme"}
               </button>
               <p className="text-center font-body text-[11px] text-muted/60">
-                Revisamos cada solicitud. Te contactamos por correo al aprobarte.
+                Revisamos cada solicitud. Te daremos un código y un PIN.
               </p>
             </form>
           )}
         </div>
 
-        {/* Consultar cuenta */}
+        {/* Mi cuenta */}
         <div className="rounded-2xl border border-gold/15 bg-obsidian/40 p-8">
-          <h2 className="font-display text-2xl text-ivory">Ya soy embajador</h2>
-          <p className="mt-2 font-body text-sm text-muted">Consulta tu código, nivel y comisiones.</p>
-          <div className="mt-6 flex gap-2">
-            <input
-              type="email"
-              placeholder="Tu correo"
-              className={inputClass}
-              value={lookupEmail}
-              onChange={(e) => setLookupEmail(e.target.value)}
-            />
-            <button onClick={() => setQueryEmail(lookupEmail.trim().toLowerCase())} className="border border-gold/40 px-5 font-body text-xs uppercase tracking-wide text-gold transition-colors hover:bg-gold hover:text-obsidian">
-              Consultar
-            </button>
+          <h2 className="font-display text-2xl text-ivory">Mi cuenta de embajador</h2>
+          <p className="mt-2 font-body text-sm text-muted">Entra con tu correo y PIN para ver y redimir tus comisiones.</p>
+          <div className="mt-6 space-y-2">
+            <input type="email" placeholder="Tu correo" className={inputClass} value={lookupEmail} onChange={(e) => setLookupEmail(e.target.value)} />
+            <div className="flex gap-2">
+              <input inputMode="numeric" maxLength={6} placeholder="PIN (6 dígitos)" className={inputClass} value={lookupPin} onChange={(e) => setLookupPin(e.target.value.replace(/\D/g, ""))} />
+              <button onClick={() => { setQueryEmail(lookupEmail.trim().toLowerCase()); setQueryPin(lookupPin.trim()); setRedeemResult(null); setRedeemErr(""); }} className="border border-gold/40 px-5 font-body text-xs uppercase tracking-wide text-gold transition-colors hover:bg-gold hover:text-obsidian">
+                Entrar
+              </button>
+            </div>
           </div>
 
-          {queryEmail && account === null && (
-            <p className="mt-4 font-body text-sm text-muted">No encontramos una cuenta con ese correo.</p>
+          {queryEmail && queryPin && account === null && (
+            <p className="mt-4 font-body text-sm text-red-300">Correo o PIN incorrectos. ¿Olvidaste tu PIN? Escríbenos.</p>
           )}
           {account && (
             <div className="mt-6 space-y-4">
@@ -159,7 +178,7 @@ function Apply() {
                   <p className="font-body text-[11px] uppercase tracking-wide text-muted">Tu código</p>
                   <p className="font-mono text-xl tracking-widest text-gold">{account.code}</p>
                 </div>
-                <button onClick={() => copyCode(account.code)} className="text-muted hover:text-gold">
+                <button onClick={() => copyText(account.code)} className="text-muted hover:text-gold">
                   {copied ? <Check className="h-5 w-5 text-emerald-400" /> : <Copy className="h-5 w-5" />}
                 </button>
               </div>
@@ -169,14 +188,31 @@ function Apply() {
                 <Stat label="Comisión" value={`${account.commissionPct}%`} />
               </div>
               <div className="grid grid-cols-2 gap-3 text-center">
-                <Stat label="Por cobrar" value={`$${account.accruedCommission.toLocaleString("es-MX")}`} highlight />
-                <Stat label="Pagado" value={`$${account.paidCommission.toLocaleString("es-MX")}`} />
+                <Stat label="Por redimir" value={`$${account.accruedCommission.toLocaleString("es-MX")}`} highlight />
+                <Stat label="Redimido" value={`$${account.paidCommission.toLocaleString("es-MX")}`} />
               </div>
-              <p className="font-body text-[11px] leading-relaxed text-muted/70">
-                {account.isActive
-                  ? `Comparte tu código "${account.code}" — tus clientes obtienen ${account.customerDiscountPct}% de descuento y tú ganas ${account.commissionPct}% de comisión. Te pagamos con un cupón.`
-                  : "Tu cuenta aún no está activa. Te avisaremos al aprobarte."}
-              </p>
+
+              {/* Redimir */}
+              {redeemResult ? (
+                <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-center">
+                  <p className="font-body text-sm text-emerald-200">¡Comisión redimida! Tu cupón por ${redeemResult.amount.toLocaleString("es-MX")}:</p>
+                  <button onClick={() => copyText(redeemResult.code)} className="mx-auto mt-2 flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-obsidian/40 px-4 py-2 font-mono text-lg tracking-widest text-emerald-200 hover:bg-obsidian/60">
+                    {redeemResult.code} <Copy className="h-4 w-4" />
+                  </button>
+                  <p className="mt-2 font-body text-[11px] text-muted/70">Úsalo como cupón en tu próxima compra.</p>
+                </div>
+              ) : account.isActive && account.accruedCommission > 0 ? (
+                <button onClick={doRedeem} className="w-full bg-gold px-6 py-3.5 font-body text-sm uppercase tracking-[0.15em] text-obsidian transition-colors hover:bg-gold-light">
+                  Redimir ${account.accruedCommission.toLocaleString("es-MX")} en un cupón
+                </button>
+              ) : (
+                <p className="font-body text-[11px] text-muted/70">
+                  {account.isActive
+                    ? `Comparte tu código "${account.code}": tus clientes obtienen ${account.customerDiscountPct}% de descuento y tú ganas ${account.commissionPct}% de comisión.`
+                    : "Tu cuenta aún no está activa."}
+                </p>
+              )}
+              {redeemErr && <p className="font-body text-sm text-red-300">{redeemErr}</p>}
             </div>
           )}
         </div>
