@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { Lock, Plus, Pencil, Trash2, Save, X, Upload, LogOut, Settings as Cog } from "lucide-react";
+import { Lock, Plus, Pencil, Trash2, Save, X, Upload, LogOut, Settings as Cog, Ticket, Power } from "lucide-react";
 
 const KEY_STORAGE = "nosterra_admin_key";
 
@@ -245,6 +245,9 @@ function AdminDashboard({ adminKey, onLogout }: { adminKey: string; onLogout: ()
             </ul>
           )}
         </section>
+
+        {/* Cupones */}
+        <CouponsCard adminKey={adminKey} />
       </main>
 
       {/* Editor (modal) */}
@@ -373,6 +376,140 @@ function SettingsCard({
             </button>
             {saved && <span className="text-sm text-emerald-600">✓ Guardado</span>}
           </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CouponsCard({ adminKey }: { adminKey: string }) {
+  const coupons = useQuery(api.coupons.listAll, { adminKey });
+  const create = useMutation(api.coupons.create);
+  const toggle = useMutation(api.coupons.toggle);
+  const remove = useMutation(api.coupons.remove);
+
+  const [showForm, setShowForm] = useState(false);
+  const [code, setCode] = useState("");
+  const [type, setType] = useState<"percent" | "fixed" | "freeship">("percent");
+  const [value, setValue] = useState("10");
+  const [minPurchase, setMin] = useState("0");
+  const [maxUses, setMaxUses] = useState("0");
+  const [expires, setExpires] = useState("");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!code.trim()) return;
+    setSaving(true);
+    try {
+      await create({
+        adminKey,
+        data: {
+          code: code.trim().toUpperCase(),
+          discountType: type,
+          discountValue: type === "freeship" ? 0 : Number(value) || 0,
+          minPurchase: Number(minPurchase) || 0,
+          maxUses: Number(maxUses) || 0,
+          expiresAt: expires ? new Date(expires + "T23:59:59").getTime() : undefined,
+          note: note.trim() || undefined,
+          isActive: true,
+        },
+      });
+      setCode(""); setValue("10"); setMin("0"); setMaxUses("0"); setExpires(""); setNote("");
+      setShowForm(false);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function describe(c: NonNullable<typeof coupons>[number]) {
+    if (c.discountType === "percent") return `${c.discountValue}% de descuento`;
+    if (c.discountType === "fixed") return `$${c.discountValue.toLocaleString("es-MX")} de descuento`;
+    return "Envío gratis";
+  }
+
+  return (
+    <section className="rounded-2xl border border-neutral-200 bg-white">
+      <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-4">
+        <h2 className="flex items-center gap-2 font-semibold text-neutral-900"><Ticket className="h-4 w-4 text-amber-600" /> Cupones de descuento</h2>
+        <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700">
+          <Plus className="h-4 w-4" /> Nuevo cupón
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="space-y-4 border-b border-neutral-100 bg-neutral-50 px-6 py-5">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Field label="Código"><input className={input} value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="MEZCAL15" /></Field>
+            <Field label="Tipo de descuento">
+              <select className={input} value={type} onChange={(e) => setType(e.target.value as typeof type)}>
+                <option value="percent">% de descuento</option>
+                <option value="fixed">Monto fijo ($)</option>
+                <option value="freeship">Envío gratis</option>
+              </select>
+            </Field>
+            {type !== "freeship" && (
+              <Field label={type === "percent" ? "Porcentaje (%)" : "Monto (MXN)"}>
+                <input type="number" className={input} value={value} onChange={(e) => setValue(e.target.value)} />
+              </Field>
+            )}
+            <Field label="Compra mínima (MXN, 0 = sin mínimo)"><input type="number" className={input} value={minPurchase} onChange={(e) => setMin(e.target.value)} /></Field>
+            <Field label="Usos máximos (0 = ilimitado)"><input type="number" className={input} value={maxUses} onChange={(e) => setMaxUses(e.target.value)} /></Field>
+            <Field label="Expira (opcional)"><input type="date" className={input} value={expires} onChange={(e) => setExpires(e.target.value)} /></Field>
+            <Field label="Nota (opcional)"><input className={input} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Promo Día de Muertos" /></Field>
+          </div>
+          <button onClick={save} disabled={saving || !code.trim()} className="flex items-center gap-2 rounded-lg bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50">
+            <Save className="h-4 w-4" /> {saving ? "Guardando..." : "Crear cupón"}
+          </button>
+        </div>
+      )}
+
+      {coupons === undefined ? (
+        <div className="p-6 space-y-2">{[1, 2].map((i) => <div key={i} className="h-12 animate-pulse rounded-lg bg-neutral-100" />)}</div>
+      ) : coupons.length === 0 ? (
+        <p className="py-10 text-center text-sm text-neutral-500">Aún no hay cupones. Crea uno para tus promociones.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-neutral-400 border-b border-neutral-100">
+                <th className="px-6 py-3 font-medium">Código</th>
+                <th className="px-4 py-3 font-medium">Descuento</th>
+                <th className="px-4 py-3 font-medium">Usos</th>
+                <th className="px-4 py-3 font-medium">Estado</th>
+                <th className="px-4 py-3 font-medium text-right">Acción</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-50">
+              {coupons.map((c) => {
+                const expired = c.expiresAt && c.expiresAt < Date.now();
+                const exhausted = c.maxUses > 0 && c.usedCount >= c.maxUses;
+                const live = c.isActive && !expired && !exhausted;
+                return (
+                  <tr key={c._id} className="hover:bg-neutral-50">
+                    <td className="px-6 py-3 font-mono font-medium text-neutral-800">{c.code}</td>
+                    <td className="px-4 py-3 text-neutral-700">{describe(c)}{c.minPurchase > 0 ? ` · mín $${c.minPurchase.toLocaleString("es-MX")}` : ""}</td>
+                    <td className="px-4 py-3 text-neutral-700">{c.usedCount}{c.maxUses > 0 ? `/${c.maxUses}` : ""}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${live ? "bg-emerald-100 text-emerald-700" : !c.isActive ? "bg-neutral-100 text-neutral-500" : "bg-amber-100 text-amber-700"}`}>
+                        {live ? "Activo" : !c.isActive ? "Desactivado" : exhausted ? "Agotado" : "Expirado"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button onClick={() => toggle({ adminKey, id: c._id, isActive: !c.isActive })} className="mr-3 inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900">
+                        <Power className="h-3.5 w-3.5" /> {c.isActive ? "Desactivar" : "Activar"}
+                      </button>
+                      <button onClick={() => { if (confirm(`¿Eliminar cupón ${c.code}?`)) remove({ adminKey, id: c._id }); }} className="inline-flex items-center text-xs text-red-500 hover:text-red-700">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </section>

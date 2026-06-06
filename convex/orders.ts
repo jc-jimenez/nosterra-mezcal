@@ -42,6 +42,10 @@ export const create = mutation({
     items: v.array(itemValidator),
     subtotal: v.number(),
     shipping: v.number(),
+    discount: v.optional(v.number()),
+    couponCode: v.optional(v.string()),
+    ambassadorId: v.optional(v.id("ambassadors")),
+    commission: v.optional(v.number()),
     total: v.number(),
   },
   handler: async (ctx, args) => {
@@ -119,6 +123,27 @@ export const markPayment = mutation({
         }
         await ctx.db.patch(product._id, patch);
       }
+
+      // Contar el uso del cupón (una sola vez)
+      if (order.couponCode) {
+        const coupon = await ctx.db
+          .query("coupons")
+          .withIndex("by_code", (q) => q.eq("code", order.couponCode!))
+          .unique();
+        if (coupon) await ctx.db.patch(coupon._id, { usedCount: coupon.usedCount + 1 });
+      }
+
+      // Acreditar comisión al embajador (Fase 2)
+      if (order.ambassadorId && order.commission && order.commission > 0) {
+        const amb = await ctx.db.get(order.ambassadorId);
+        if (amb) {
+          await ctx.db.patch(order.ambassadorId, {
+            accruedCommission: amb.accruedCommission + order.commission,
+            salesCount: amb.salesCount + 1,
+          });
+        }
+      }
+
       await ctx.db.patch(order._id, { stockApplied: true });
     }
 

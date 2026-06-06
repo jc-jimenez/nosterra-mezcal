@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ShoppingBag, ShieldCheck, Truck, CreditCard, Minus, Plus, Trash2, Gift, Sparkles } from "lucide-react";
+import { ChevronLeft, ShoppingBag, ShieldCheck, Truck, CreditCard, Minus, Plus, Trash2, Gift, Sparkles, Ticket, Check, X } from "lucide-react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { useCart } from "@/hooks/useCart";
 import { useStoreSettings } from "@/hooks/useStoreSettings";
 import { formatMXN } from "@/lib/store-config";
@@ -54,13 +56,36 @@ export default function CheckoutPage() {
   const [payError, setPayError] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
 
+  // Cupón
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCode, setAppliedCode] = useState("");
+
   useEffect(() => setMounted(true), []);
 
   const subtotalAmount = mounted ? subtotal() : 0;
-  const freeShip = subtotalAmount >= settings.freeShippingFrom;
+
+  // Validación reactiva del cupón (se recalcula si cambia el subtotal)
+  const coupon = useQuery(
+    api.coupons.validate,
+    appliedCode && subtotalAmount > 0 ? { code: appliedCode, subtotal: subtotalAmount } : "skip"
+  );
+  const couponOk = coupon?.ok === true;
+  const discount = couponOk ? coupon.discount : 0;
+  const couponFreeShip = couponOk ? coupon.freeShipping : false;
+
+  const freeShip = subtotalAmount >= settings.freeShippingFrom || couponFreeShip;
   const shippingCost = freeShip ? 0 : settings.shippingCost;
-  const total = subtotalAmount + shippingCost;
+  const discountedSubtotal = Math.max(0, subtotalAmount - discount);
+  const total = discountedSubtotal + shippingCost;
   const outsideMexico = form.pais !== "México";
+
+  function applyCoupon() {
+    setAppliedCode(couponInput.trim().toUpperCase());
+  }
+  function removeCoupon() {
+    setAppliedCode("");
+    setCouponInput("");
+  }
 
   function set<K extends keyof Form>(k: K, v: string) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -87,15 +112,13 @@ export default function CheckoutPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: items.map((i) => ({ slug: i.slug, name: i.name, price: i.price, qty: i.qty })),
+          items: items.map((i) => ({ slug: i.slug, qty: i.qty })),
           customer: { name: form.nombre, email: form.email || "sin-correo@nosterramezcal.com", phone: form.telefono },
           shipping: {
             calle: form.calle, numero: form.numero, colonia: form.colonia, cp: form.cp,
             ciudad: form.ciudad, estado: form.estado, pais: form.pais, referencias: form.referencias,
           },
-          subtotal: subtotalAmount,
-          shippingCost,
-          total,
+          couponCode: couponOk ? appliedCode : undefined,
         }),
       });
       const data = await res.json();
@@ -125,6 +148,7 @@ export default function CheckoutPage() {
       `¡Hola NOSTERRA! Quiero hacer un pedido:\n\n` +
       `*PRODUCTOS*\n${productos}\n` +
       `Subtotal: ${formatMXN(subtotalAmount)}\n` +
+      (discount > 0 ? `Cupón ${appliedCode}: -${formatMXN(discount)}\n` : "") +
       `Envío: ${envio}\n` +
       `Total: ${formatMXN(total)}\n\n` +
       `*DATOS DE ENVÍO*\n` +
@@ -334,10 +358,45 @@ export default function CheckoutPage() {
               <Plus className="h-4 w-4 transition-transform group-hover:rotate-90" />
               Agregar otro mezcal
             </Link>
+
+            {/* Cupón de descuento */}
+            <div className="mt-5">
+              <label className="mb-1.5 flex items-center gap-1.5 font-body text-xs uppercase tracking-[0.15em] text-gold/80">
+                <Ticket className="h-3.5 w-3.5" /> ¿Tienes un cupón?
+              </label>
+              <div className="flex gap-2">
+                <input
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                  placeholder="CÓDIGO"
+                  className="flex-1 border border-gold/20 bg-obsidian/60 px-3 py-2.5 font-body text-sm uppercase tracking-wider text-ivory placeholder:text-muted/50 focus:border-gold focus:outline-none"
+                />
+                {couponOk ? (
+                  <button type="button" onClick={removeCoupon} className="flex items-center gap-1 border border-red-400/30 px-3 font-body text-xs uppercase tracking-wide text-red-300 transition-colors hover:bg-red-400/10">
+                    <X className="h-3.5 w-3.5" /> Quitar
+                  </button>
+                ) : (
+                  <button type="button" onClick={applyCoupon} disabled={!couponInput.trim()} className="border border-gold/40 px-4 font-body text-xs uppercase tracking-wide text-gold transition-colors hover:bg-gold hover:text-obsidian disabled:opacity-40">
+                    Aplicar
+                  </button>
+                )}
+              </div>
+              {appliedCode && coupon && (
+                <p className={`mt-2 flex items-center gap-1.5 font-body text-xs ${couponOk ? "text-agave-light" : "text-red-300"}`}>
+                  {couponOk ? <><Check className="h-3.5 w-3.5" /> Cupón <strong>{appliedCode}</strong> aplicado</> : <>{coupon.error}</>}
+                </p>
+              )}
+            </div>
+
             <div className="mt-5 space-y-2 border-t border-gold/10 pt-5 font-body text-sm">
               <div className="flex justify-between text-muted">
                 <span>Subtotal</span><span className="text-ivory">{formatMXN(subtotalAmount)}</span>
               </div>
+              {discount > 0 && (
+                <div className="flex justify-between text-agave-light">
+                  <span>Descuento ({appliedCode})</span><span>−{formatMXN(discount)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-muted">
                 <span>Envío</span>
                 <span className={freeShip ? "text-agave-light" : "text-ivory"}>
