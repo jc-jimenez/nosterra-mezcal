@@ -243,6 +243,10 @@ export default function CheckoutPage() {
                   <CreditCard className="h-4 w-4" />
                   {outsideMexico ? "Disponible solo en México" : paying ? "Redirigiendo al pago…" : "Pagar con tarjeta"}
                 </button>
+                <p className="text-center font-body text-[11px] leading-relaxed text-muted/80">
+                  No necesitas cuenta de Mercado Pago. Paga como invitado con
+                  tarjeta de crédito o débito, en efectivo (OXXO) o por transferencia.
+                </p>
 
                 <div className="flex items-center gap-3 py-1">
                   <span className="h-px flex-1 bg-gold/15" />
