@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ShoppingBag, ShieldCheck, Truck } from "lucide-react";
+import { ChevronLeft, ShoppingBag, ShieldCheck, Truck, CreditCard } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
 import { useStoreSettings } from "@/hooks/useStoreSettings";
 import { formatMXN } from "@/lib/store-config";
@@ -49,20 +49,67 @@ export default function CheckoutPage() {
   const [mounted, setMounted] = useState(false);
   const [form, setForm] = useState<Form>(EMPTY);
   const [done, setDone] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => setMounted(true), []);
 
   const total = mounted ? subtotal() : 0;
   const freeShip = total >= settings.freeShippingFrom;
+  const shippingCost = freeShip ? 0 : 0; // costo de envío se confirma aparte; 0 por ahora
   const outsideMexico = form.pais !== "México";
 
   function set<K extends keyof Form>(k: K, v: string) {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  const cardEnabled = process.env.NEXT_PUBLIC_CARD_PAYMENTS === "true";
+
+  function onFormSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (outsideMexico) return; // Solo envíos dentro de México por ahora
+    if (outsideMexico) return;
+    if (cardEnabled) void payWithCard();
+    else sendWhatsApp();
+  }
+
+  // Pago con tarjeta (Mercado Pago)
+  async function payWithCard() {
+    if (outsideMexico || paying) return;
+    setPaying(true);
+    setPayError("");
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map((i) => ({ slug: i.slug, name: i.name, price: i.price, qty: i.qty })),
+          customer: { name: form.nombre, email: form.email || "sin-correo@nosterramezcal.com", phone: form.telefono },
+          shipping: {
+            calle: form.calle, numero: form.numero, colonia: form.colonia, cp: form.cp,
+            ciudad: form.ciudad, estado: form.estado, pais: form.pais, referencias: form.referencias,
+          },
+          subtotal: total,
+          shippingCost,
+          total: total + shippingCost,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.checkoutUrl) {
+        window.location.href = data.checkoutUrl; // a la pasarela de Mercado Pago
+      } else {
+        setPayError(data.error ?? "No se pudo iniciar el pago.");
+        setPaying(false);
+      }
+    } catch {
+      setPayError("Error de conexión. Intenta de nuevo.");
+      setPaying(false);
+    }
+  }
+
+  // Pedido por WhatsApp (alternativa)
+  function sendWhatsApp() {
+    if (outsideMexico) return;
 
     const productos = items
       .map((i) => `• ${i.qty}× ${i.name} — ${formatMXN(i.price * i.qty)}`)
@@ -139,7 +186,7 @@ export default function CheckoutPage() {
 
         <div className="mt-10 grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
           {/* Formulario */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form ref={formRef} onSubmit={onFormSubmit} className="space-y-4">
             <h2 className="font-body text-xs uppercase tracking-[0.25em] text-gold">Datos de envío</h2>
 
             {/* País — solo México disponible por ahora */}
@@ -179,13 +226,53 @@ export default function CheckoutPage() {
             </div>
             <textarea rows={2} placeholder="Referencias de entrega (opcional)" className={`${inputClass} resize-none`} value={form.referencias} onChange={(e) => set("referencias", e.target.value)} />
 
-            <button type="submit" disabled={outsideMexico} className="flex w-full items-center justify-center gap-2 bg-gold px-6 py-4 font-body text-sm uppercase tracking-[0.15em] text-obsidian transition-colors hover:bg-gold-light disabled:cursor-not-allowed disabled:opacity-40">
-              <ShoppingBag className="h-4 w-4" />
-              {outsideMexico ? "Disponible solo en México" : "Enviar pedido por WhatsApp"}
-            </button>
-            <p className="text-center font-body text-[11px] text-muted/60">
-              Envíos solo dentro de México · No se cobra nada en este paso. El pago se acuerda por WhatsApp.
-            </p>
+            {payError && (
+              <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 font-body text-sm text-red-300">
+                {payError}
+              </p>
+            )}
+
+            {cardEnabled ? (
+              <>
+                {/* Primario: pago con tarjeta */}
+                <button type="submit" disabled={outsideMexico || paying} className="flex w-full items-center justify-center gap-2 bg-gold px-6 py-4 font-body text-sm uppercase tracking-[0.15em] text-obsidian transition-colors hover:bg-gold-light disabled:cursor-not-allowed disabled:opacity-40">
+                  <CreditCard className="h-4 w-4" />
+                  {outsideMexico ? "Disponible solo en México" : paying ? "Redirigiendo al pago…" : "Pagar con tarjeta"}
+                </button>
+
+                <div className="flex items-center gap-3 py-1">
+                  <span className="h-px flex-1 bg-gold/15" />
+                  <span className="font-body text-[11px] uppercase tracking-[0.2em] text-muted/60">o</span>
+                  <span className="h-px flex-1 bg-gold/15" />
+                </div>
+
+                {/* Secundario: WhatsApp */}
+                <button
+                  type="button"
+                  disabled={outsideMexico}
+                  onClick={() => { if (formRef.current?.reportValidity()) sendWhatsApp(); }}
+                  className="flex w-full items-center justify-center gap-2 border border-gold/40 px-6 py-3.5 font-body text-sm uppercase tracking-[0.15em] text-gold transition-colors hover:bg-gold hover:text-obsidian disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ShoppingBag className="h-4 w-4" />
+                  Pedir por WhatsApp
+                </button>
+
+                <p className="text-center font-body text-[11px] text-muted/60">
+                  Pago seguro con Mercado Pago. Envíos solo dentro de México.
+                </p>
+              </>
+            ) : (
+              <>
+                {/* Solo WhatsApp (pago con tarjeta aún no habilitado) */}
+                <button type="submit" disabled={outsideMexico} className="flex w-full items-center justify-center gap-2 bg-gold px-6 py-4 font-body text-sm uppercase tracking-[0.15em] text-obsidian transition-colors hover:bg-gold-light disabled:cursor-not-allowed disabled:opacity-40">
+                  <ShoppingBag className="h-4 w-4" />
+                  {outsideMexico ? "Disponible solo en México" : "Enviar pedido por WhatsApp"}
+                </button>
+                <p className="text-center font-body text-[11px] text-muted/60">
+                  Envíos solo dentro de México · No se cobra nada en este paso. El pago se acuerda por WhatsApp.
+                </p>
+              </>
+            )}
           </form>
 
           {/* Resumen */}
