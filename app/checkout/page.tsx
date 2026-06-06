@@ -64,7 +64,9 @@ export default function CheckoutPage() {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
-  const cardEnabled = process.env.NEXT_PUBLIC_CARD_PAYMENTS === "true";
+  // Pago con tarjeta habilitado (Mercado Pago configurado). Para desactivarlo,
+  // poner NEXT_PUBLIC_CARD_PAYMENTS = "false".
+  const cardEnabled = process.env.NEXT_PUBLIC_CARD_PAYMENTS !== "false";
 
   function onFormSubmit(e: React.FormEvent) {
     e.preventDefault();
