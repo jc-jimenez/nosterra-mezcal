@@ -183,6 +183,59 @@ export const sendOrderConfirmation = internalAction({
   },
 });
 
+// Aviso al dueño/operador cuando entra un pedido pagado
+export const sendOwnerNewOrder = internalAction({
+  args: {
+    orderNumber: v.string(),
+    customerName: v.string(),
+    customerEmail: v.string(),
+    customerPhone: v.optional(v.string()),
+    items: v.array(v.object({ name: v.string(), qty: v.number(), price: v.number() })),
+    total: v.number(),
+    couponCode: v.optional(v.string()),
+    ambassadorCode: v.optional(v.string()),
+    city: v.string(),
+    state: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const apiKey = process.env.RESEND_API_KEY;
+    const from = process.env.EMAIL_FROM || "NOSTERRA <onboarding@resend.dev>";
+    const to = process.env.OWNER_EMAIL;
+    if (!apiKey || !to) {
+      console.warn("RESEND_API_KEY u OWNER_EMAIL no configuradas — se omite el aviso de pedido.");
+      return { ok: false, skipped: true };
+    }
+
+    const itemsHtml = args.items
+      .map((i) => `<tr><td style="padding:6px 0;font-size:14px;color:#3a3a34">${i.name} ×${i.qty}</td><td style="padding:6px 0;font-size:14px;color:#3a3a34;text-align:right">$${(i.price * i.qty).toLocaleString("es-MX")}</td></tr>`)
+      .join("");
+
+    const html = layout(`🛎️ Nuevo pedido: ${args.orderNumber}`, `
+      <p style="font-size:15px;line-height:1.7;color:#3a3a34;margin:0 0 16px">
+        Entró un pedido pagado por <strong>$${args.total.toLocaleString("es-MX")} MXN</strong>.
+      </p>
+      <div style="background:#f9f7f4;border-radius:10px;padding:16px 18px;margin-bottom:16px">
+        <p style="margin:0 0 4px;font-size:14px;color:#3a3a34"><strong>Cliente:</strong> ${args.customerName}</p>
+        <p style="margin:0 0 4px;font-size:14px;color:#3a3a34"><strong>Correo:</strong> ${args.customerEmail}</p>
+        ${args.customerPhone ? `<p style="margin:0 0 4px;font-size:14px;color:#3a3a34"><strong>Tel:</strong> ${args.customerPhone}</p>` : ""}
+        <p style="margin:0 0 4px;font-size:14px;color:#3a3a34"><strong>Envío a:</strong> ${args.city}, ${args.state}</p>
+        ${args.couponCode ? `<p style="margin:0 0 4px;font-size:14px;color:#3a3a34"><strong>Cupón:</strong> ${args.couponCode}</p>` : ""}
+        ${args.ambassadorCode ? `<p style="margin:0;font-size:14px;color:#3a3a34"><strong>Embajador:</strong> ${args.ambassadorCode}</p>` : ""}
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:8px">${itemsHtml}</table>
+      <div style="text-align:center;margin:22px 0 6px">
+        <a href="https://www.nosterramezcal.com/admin/crm" style="display:inline-block;background:${BRAND};color:${DARK};text-decoration:none;padding:13px 30px;border-radius:8px;font-size:14px;font-weight:600">Ver en el CRM</a>
+      </div>`);
+
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from, to: [to], subject: `🛎️ Nuevo pedido ${args.orderNumber} · $${args.total.toLocaleString("es-MX")}`, html }),
+    });
+    return res.ok ? { ok: true } : { ok: false };
+  },
+});
+
 // Correo de campaña/motivación a embajadores
 export const sendCampaignEmail = internalAction({
   args: { to: v.string(), name: v.string(), subject: v.string(), body: v.string() },

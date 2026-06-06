@@ -184,6 +184,25 @@ export const markPayment = mutation({
           estado: order.shippingAddress.estado,
         },
       });
+
+      // Aviso al dueño de que entró un pedido nuevo
+      let ambCode: string | undefined;
+      if (order.ambassadorId) {
+        const amb = await ctx.db.get(order.ambassadorId);
+        ambCode = amb?.code;
+      }
+      await ctx.scheduler.runAfter(0, internal.emails.sendOwnerNewOrder, {
+        orderNumber: order.orderNumber,
+        customerName: order.customerName,
+        customerEmail: order.customerEmail,
+        customerPhone: order.customerPhone,
+        items: order.items.map((i) => ({ name: i.name, qty: i.qty, price: i.price })),
+        total: order.total,
+        couponCode: order.couponCode,
+        ambassadorCode: ambCode,
+        city: order.shippingAddress.ciudad,
+        state: order.shippingAddress.estado,
+      });
     }
 
     return { ok: true };
