@@ -2,35 +2,41 @@
 
 import Image from "next/image";
 import { ShoppingBag } from "lucide-react";
-import { numberedEdition as p } from "@/lib/products";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { useCart } from "@/hooks/useCart";
 import { formatMXN } from "@/lib/store-config";
 import { Reveal } from "./Reveal";
 
 export function EdicionConmemorativa() {
   const add = useCart((s) => s.add);
-  const { total, available } = p.numbered!;
-  const soldPct = Math.round(((total - available) / total) * 100);
+  const products = useQuery(api.products.listActive);
+  const p = products?.find((x) => x.isLimited);
+
+  // Si no hay edición limitada, no renderizamos la sección
+  if (!p) return null;
+
+  const total = p.bottlesTotal ?? 0;
+  const available = p.bottlesAvailable ?? 0;
+  const soldPct = total > 0 ? Math.round(((total - available) / total) * 100) : 0;
 
   return (
     <section
       id="edicion"
       className="relative overflow-hidden border-y border-gold/15 bg-smoke py-28"
     >
-      {/* Resplandor cobre */}
       <div className="absolute left-1/2 top-0 -z-0 h-96 w-96 -translate-x-1/2 rounded-full bg-copper/10 blur-3xl" />
 
       <div className="relative mx-auto grid max-w-7xl items-center gap-16 px-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-10">
-        {/* Texto */}
         <div>
           <Reveal>
             <p className="font-body text-xs uppercase tracking-[0.3em] text-copper">
-              Edición limitada · 84 botellas
+              Edición limitada · {total} botellas
             </p>
             <h2 className="mt-4 font-display text-5xl font-light leading-tight text-ivory lg:text-6xl">
               Conmemorativa
               <span className="block font-display text-3xl italic text-gold/90">
-                Gral. Artemio Brito Abarca
+                {p.tagline}
               </span>
             </h2>
             <p className="mt-6 max-w-lg font-body text-base leading-relaxed text-muted">
@@ -38,7 +44,6 @@ export function EdicionConmemorativa() {
             </p>
           </Reveal>
 
-          {/* Contador de disponibilidad (tiempo real con Convex en Fase 2) */}
           <Reveal delay={0.15}>
             <div className="mt-10 max-w-md">
               <div className="flex items-end justify-between font-body">
@@ -57,7 +62,7 @@ export function EdicionConmemorativa() {
                 />
               </div>
               <p className="mt-2 font-body text-[11px] text-muted/70">
-                Cada botella lleva su número grabado del 1 al 84.
+                Cada botella lleva su número grabado del 1 al {total}.
               </p>
             </div>
           </Reveal>
@@ -81,18 +86,20 @@ export function EdicionConmemorativa() {
           </Reveal>
         </div>
 
-        {/* Etiqueta Artemio */}
         <Reveal delay={0.2} className="relative mx-auto w-full max-w-sm">
           <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_center,rgba(155,107,58,0.25),transparent_70%)]" />
-          <div className="overflow-hidden rounded-lg border border-gold/20 shadow-2xl">
-            <Image
-              src={p.image}
-              alt="Etiqueta de la Edición Conmemorativa Gral. Artemio Brito Abarca"
-              width={500}
-              height={700}
-              className="h-auto w-full object-contain"
-            />
-          </div>
+          {p.image && (
+            <div className="overflow-hidden rounded-lg border border-gold/20 shadow-2xl">
+              <Image
+                src={p.image}
+                alt={`Etiqueta de ${p.name}`}
+                width={500}
+                height={700}
+                className="h-auto w-full object-contain"
+                unoptimized={p.image.startsWith("http")}
+              />
+            </div>
+          )}
         </Reveal>
       </div>
     </section>

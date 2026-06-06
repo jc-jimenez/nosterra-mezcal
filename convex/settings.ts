@@ -1,0 +1,40 @@
+import { query, mutation } from "./_generated/server";
+import { v } from "convex/values";
+
+const DEFAULTS = {
+  whatsappNumber: "527775238569",
+  shippingNote: "Envío a todo México · 3–5 días hábiles",
+  freeShippingFrom: 1500,
+  currency: "MXN",
+};
+
+function assertAdmin(key: string) {
+  const expected = process.env.ADMIN_PASSWORD;
+  if (!expected) throw new Error("ADMIN_PASSWORD no configurada en Convex");
+  if (key !== expected) throw new Error("Contraseña de administrador incorrecta");
+}
+
+export const get = query({
+  handler: async (ctx) => {
+    const s = await ctx.db.query("settings").first();
+    return s ?? DEFAULTS;
+  },
+});
+
+export const upsert = mutation({
+  args: {
+    adminKey: v.string(),
+    data: v.object({
+      whatsappNumber: v.string(),
+      shippingNote: v.string(),
+      freeShippingFrom: v.number(),
+      currency: v.string(),
+    }),
+  },
+  handler: async (ctx, { adminKey, data }) => {
+    assertAdmin(adminKey);
+    const existing = await ctx.db.query("settings").first();
+    if (existing) await ctx.db.patch(existing._id, data);
+    else await ctx.db.insert("settings", data);
+  },
+});

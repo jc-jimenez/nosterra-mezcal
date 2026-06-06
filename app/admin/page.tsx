@@ -1,0 +1,391 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+import { Lock, Plus, Pencil, Trash2, Save, X, Upload, LogOut, Settings as Cog } from "lucide-react";
+
+const KEY_STORAGE = "nosterra_admin_key";
+
+interface Draft {
+  _id?: Id<"products">;
+  slug: string;
+  name: string;
+  tagline: string;
+  description: string;
+  price: string;
+  agave: string;
+  alcohol: string;
+  volume: string;
+  origin: string;
+  process: string;
+  stock: string;
+  featured: boolean;
+  isActive: boolean;
+  isLimited: boolean;
+  bottlesTotal: string;
+  bottlesAvailable: string;
+  sortOrder: string;
+  imageStorageId?: Id<"_storage">;
+  imageUrl: string;
+  image?: string; // preview existente
+}
+
+const EMPTY_DRAFT: Draft = {
+  slug: "", name: "", tagline: "", description: "", price: "", agave: "Espadín",
+  alcohol: "40% Alc. Vol.", volume: "750 ml", origin: "Santiago Matatlán, Oaxaca",
+  process: "Artesanal", stock: "0", featured: false, isActive: true, isLimited: false,
+  bottlesTotal: "", bottlesAvailable: "", sortOrder: "0", imageUrl: "", image: "",
+};
+
+const input = "w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-600";
+
+export default function AdminPage() {
+  const [adminKey, setAdminKey] = useState<string | null>(null);
+  const [pwd, setPwd] = useState("");
+  const [authError, setAuthError] = useState("");
+
+  useEffect(() => {
+    const k = sessionStorage.getItem(KEY_STORAGE);
+    if (k) setAdminKey(k);
+  }, []);
+
+  const checkAdmin = useMutation(api.products.checkAdmin);
+
+  async function login(e: React.FormEvent) {
+    e.preventDefault();
+    setAuthError("");
+    try {
+      await checkAdmin({ adminKey: pwd });
+      sessionStorage.setItem(KEY_STORAGE, pwd);
+      setAdminKey(pwd);
+    } catch {
+      setAuthError("Contraseña incorrecta");
+    }
+  }
+
+  function logout() {
+    sessionStorage.removeItem(KEY_STORAGE);
+    setAdminKey(null);
+    setPwd("");
+  }
+
+  if (!adminKey) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-neutral-100 px-6">
+        <form onSubmit={login} className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm">
+          <div className="mb-6 flex flex-col items-center text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-neutral-900">
+              <Lock className="h-5 w-5 text-amber-400" />
+            </div>
+            <h1 className="mt-4 text-lg font-bold text-neutral-900">Panel NOSTERRA</h1>
+            <p className="mt-1 text-sm text-neutral-500">Acceso de administrador</p>
+          </div>
+          <input
+            type="password" value={pwd} onChange={(e) => setPwd(e.target.value)}
+            placeholder="Contraseña" className={input} autoFocus
+          />
+          {authError && <p className="mt-2 text-sm text-red-600">{authError}</p>}
+          <button type="submit" className="mt-4 w-full rounded-lg bg-neutral-900 py-2.5 text-sm font-medium text-white hover:bg-neutral-800">
+            Entrar
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  return <AdminDashboard adminKey={adminKey} onLogout={logout} />;
+}
+
+function AdminDashboard({ adminKey, onLogout }: { adminKey: string; onLogout: () => void }) {
+  const products = useQuery(api.products.listAll);
+  const settings = useQuery(api.settings.get);
+  const create = useMutation(api.products.create);
+  const update = useMutation(api.products.update);
+  const remove = useMutation(api.products.remove);
+  const genUrl = useMutation(api.products.generateUploadUrl);
+  const upsertSettings = useMutation(api.settings.upsert);
+
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function startNew() { setDraft({ ...EMPTY_DRAFT, sortOrder: String((products?.length ?? 0) + 1) }); }
+  function startEdit(p: NonNullable<typeof products>[number]) {
+    setDraft({
+      _id: p._id, slug: p.slug, name: p.name, tagline: p.tagline, description: p.description,
+      price: String(p.price), agave: p.agave, alcohol: p.alcohol, volume: p.volume,
+      origin: p.origin, process: p.process, stock: String(p.stock), featured: p.featured,
+      isActive: p.isActive, isLimited: p.isLimited, bottlesTotal: p.bottlesTotal != null ? String(p.bottlesTotal) : "",
+      bottlesAvailable: p.bottlesAvailable != null ? String(p.bottlesAvailable) : "",
+      sortOrder: String(p.sortOrder), imageStorageId: p.imageStorageId, imageUrl: p.imageUrl ?? "", image: p.image,
+    });
+  }
+
+  function set<K extends keyof Draft>(k: K, v: Draft[K]) {
+    setDraft((d) => (d ? { ...d, [k]: v } : d));
+  }
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !draft) return;
+    setUploading(true);
+    try {
+      const url = await genUrl({ adminKey });
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": file.type }, body: file });
+      const { storageId } = await res.json();
+      set("imageStorageId", storageId as Id<"_storage">);
+      set("image", URL.createObjectURL(file));
+      set("imageUrl", "");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function save() {
+    if (!draft) return;
+    setSaving(true);
+    try {
+      const data = {
+        slug: draft.slug.trim(),
+        name: draft.name.trim(),
+        tagline: draft.tagline.trim(),
+        description: draft.description.trim(),
+        price: Number(draft.price) || 0,
+        agave: draft.agave.trim(),
+        alcohol: draft.alcohol.trim(),
+        volume: draft.volume.trim(),
+        origin: draft.origin.trim(),
+        process: draft.process.trim(),
+        stock: Number(draft.stock) || 0,
+        featured: draft.featured,
+        isActive: draft.isActive,
+        isLimited: draft.isLimited,
+        sortOrder: Number(draft.sortOrder) || 0,
+        ...(draft.imageStorageId ? { imageStorageId: draft.imageStorageId } : {}),
+        ...(!draft.imageStorageId && draft.imageUrl ? { imageUrl: draft.imageUrl.trim() } : {}),
+        ...(draft.isLimited
+          ? { bottlesTotal: Number(draft.bottlesTotal) || 0, bottlesAvailable: Number(draft.bottlesAvailable) || 0 }
+          : {}),
+      };
+      if (draft._id) await update({ adminKey, id: draft._id, data });
+      else await create({ adminKey, data });
+      setDraft(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Error al guardar");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function del(id: Id<"products">, name: string) {
+    if (!confirm(`¿Eliminar "${name}"? Esta acción no se puede deshacer.`)) return;
+    await remove({ adminKey, id });
+  }
+
+  return (
+    <div className="min-h-screen bg-neutral-100">
+      <header className="border-b border-neutral-200 bg-white">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+          <div>
+            <h1 className="text-lg font-bold text-neutral-900">NOSTERRA · Panel</h1>
+            <p className="text-xs text-neutral-500">Gestión de productos y configuración</p>
+          </div>
+          <button onClick={onLogout} className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-900">
+            <LogOut className="h-4 w-4" /> Salir
+          </button>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-5xl space-y-8 px-6 py-8">
+        {/* Configuración */}
+        <SettingsCard
+          settings={settings}
+          onSave={async (data) => { await upsertSettings({ adminKey, data }); }}
+        />
+
+        {/* Productos */}
+        <section className="rounded-2xl border border-neutral-200 bg-white">
+          <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-4">
+            <h2 className="font-semibold text-neutral-900">Productos</h2>
+            <button onClick={startNew} className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700">
+              <Plus className="h-4 w-4" /> Nuevo producto
+            </button>
+          </div>
+
+          {products === undefined ? (
+            <div className="p-6 space-y-2">{[1, 2].map((i) => <div key={i} className="h-16 animate-pulse rounded-lg bg-neutral-100" />)}</div>
+          ) : products.length === 0 ? (
+            <p className="py-10 text-center text-sm text-neutral-500">Aún no hay productos.</p>
+          ) : (
+            <ul className="divide-y divide-neutral-50">
+              {products.map((p) => (
+                <li key={p._id} className="flex items-center gap-4 px-6 py-4">
+                  <div className="h-14 w-11 flex-shrink-0 overflow-hidden rounded bg-neutral-100">
+                    {p.image && <Image src={p.image} alt={p.name} width={44} height={56} className="h-full w-full object-contain" unoptimized />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-neutral-900">{p.name}</p>
+                    <p className="text-xs text-neutral-500">
+                      ${p.price.toLocaleString("es-MX")} · {p.isActive ? "Activo" : "Oculto"}
+                      {p.featured ? " · Destacado" : ""}{p.isLimited ? " · Limitada" : ""}
+                    </p>
+                  </div>
+                  <button onClick={() => startEdit(p)} className="flex items-center gap-1 text-sm text-neutral-600 hover:text-neutral-900">
+                    <Pencil className="h-4 w-4" /> Editar
+                  </button>
+                  <button onClick={() => del(p._id, p.name)} className="flex items-center gap-1 text-sm text-red-500 hover:text-red-700">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </main>
+
+      {/* Editor (modal) */}
+      {draft && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
+          <div className="my-8 w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-neutral-900">{draft._id ? "Editar producto" : "Nuevo producto"}</h3>
+              <button onClick={() => setDraft(null)} className="text-neutral-400 hover:text-neutral-900"><X className="h-5 w-5" /></button>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Nombre"><input className={input} value={draft.name} onChange={(e) => set("name", e.target.value)} /></Field>
+              <Field label="Slug (URL, sin espacios)"><input className={input} value={draft.slug} onChange={(e) => set("slug", e.target.value.toLowerCase().replace(/\s+/g, "-"))} /></Field>
+              <Field label="Tagline (frase corta)"><input className={input} value={draft.tagline} onChange={(e) => set("tagline", e.target.value)} /></Field>
+              <Field label="Precio (MXN)"><input type="number" className={input} value={draft.price} onChange={(e) => set("price", e.target.value)} /></Field>
+            </div>
+
+            <Field label="Descripción"><textarea rows={3} className={`${input} resize-none`} value={draft.description} onChange={(e) => set("description", e.target.value)} /></Field>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Agave"><input className={input} value={draft.agave} onChange={(e) => set("agave", e.target.value)} /></Field>
+              <Field label="Volumen"><input className={input} value={draft.volume} onChange={(e) => set("volume", e.target.value)} /></Field>
+              <Field label="Alcohol"><input className={input} value={draft.alcohol} onChange={(e) => set("alcohol", e.target.value)} /></Field>
+              <Field label="Origen"><input className={input} value={draft.origin} onChange={(e) => set("origin", e.target.value)} /></Field>
+              <Field label="Proceso"><input className={input} value={draft.process} onChange={(e) => set("process", e.target.value)} /></Field>
+              <Field label="Stock"><input type="number" className={input} value={draft.stock} onChange={(e) => set("stock", e.target.value)} /></Field>
+            </div>
+
+            {/* Imagen */}
+            <Field label="Imagen">
+              <div className="flex items-center gap-4">
+                <div className="h-24 w-20 flex-shrink-0 overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50">
+                  {draft.image ? <Image src={draft.image} alt="preview" width={80} height={96} className="h-full w-full object-contain" unoptimized /> : <div className="flex h-full items-center justify-center text-xs text-neutral-400">Sin imagen</div>}
+                </div>
+                <div className="flex-1">
+                  <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="flex items-center gap-2 rounded-lg border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50">
+                    <Upload className="h-4 w-4" /> {uploading ? "Subiendo..." : "Subir imagen"}
+                  </button>
+                  <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+                  <p className="mt-1.5 text-xs text-neutral-400">JPG o PNG. Recomendado fondo transparente.</p>
+                </div>
+              </div>
+            </Field>
+
+            {/* Flags */}
+            <div className="mt-4 flex flex-wrap gap-5">
+              <Check label="Activo (visible en la tienda)" checked={draft.isActive} onChange={(v) => set("isActive", v)} />
+              <Check label="Destacado (Hero)" checked={draft.featured} onChange={(v) => set("featured", v)} />
+              <Check label="Edición limitada (numerada)" checked={draft.isLimited} onChange={(v) => set("isLimited", v)} />
+            </div>
+
+            {draft.isLimited && (
+              <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                <Field label="Botellas totales"><input type="number" className={input} value={draft.bottlesTotal} onChange={(e) => set("bottlesTotal", e.target.value)} /></Field>
+                <Field label="Botellas disponibles"><input type="number" className={input} value={draft.bottlesAvailable} onChange={(e) => set("bottlesAvailable", e.target.value)} /></Field>
+                <Field label="Orden"><input type="number" className={input} value={draft.sortOrder} onChange={(e) => set("sortOrder", e.target.value)} /></Field>
+              </div>
+            )}
+            {!draft.isLimited && (
+              <Field label="Orden de aparición"><input type="number" className={input} value={draft.sortOrder} onChange={(e) => set("sortOrder", e.target.value)} /></Field>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button onClick={() => setDraft(null)} className="rounded-lg border border-neutral-300 px-5 py-2.5 text-sm hover:bg-neutral-50">Cancelar</button>
+              <button onClick={save} disabled={saving || !draft.name || !draft.slug} className="flex items-center gap-2 rounded-lg bg-neutral-900 px-6 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50">
+                <Save className="h-4 w-4" /> {saving ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SettingsCard({
+  settings,
+  onSave,
+}: {
+  settings: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; currency: string } | undefined;
+  onSave: (d: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; currency: string }) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [wa, setWa] = useState("");
+  const [note, setNote] = useState("");
+  const [free, setFree] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (settings) { setWa(settings.whatsappNumber); setNote(settings.shippingNote); setFree(String(settings.freeShippingFrom)); }
+  }, [settings]);
+
+  async function save() {
+    setSaving(true); setSaved(false);
+    try {
+      await onSave({ whatsappNumber: wa.trim(), shippingNote: note.trim(), freeShippingFrom: Number(free) || 0, currency: "MXN" });
+      setSaved(true); setTimeout(() => setSaved(false), 2000);
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <section className="rounded-2xl border border-neutral-200 bg-white">
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between px-6 py-4">
+        <span className="flex items-center gap-2 font-semibold text-neutral-900"><Cog className="h-4 w-4 text-neutral-500" /> Configuración de la tienda</span>
+        <span className="text-sm text-neutral-400">{open ? "Ocultar" : "Editar"}</span>
+      </button>
+      {open && (
+        <div className="space-y-4 border-t border-neutral-100 px-6 py-5">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="WhatsApp (52 + 10 dígitos)"><input className={input} value={wa} onChange={(e) => setWa(e.target.value)} placeholder="527775238569" /></Field>
+            <Field label="Envío gratis desde (MXN)"><input type="number" className={input} value={free} onChange={(e) => setFree(e.target.value)} /></Field>
+            <Field label="Nota de envío"><input className={input} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={save} disabled={saving} className="flex items-center gap-2 rounded-lg bg-neutral-900 px-5 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50">
+              <Save className="h-4 w-4" /> {saving ? "Guardando..." : "Guardar configuración"}
+            </button>
+            {saved && <span className="text-sm text-emerald-600">✓ Guardado</span>}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-medium text-neutral-600">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2 text-sm text-neutral-700">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4 accent-amber-600" />
+      {label}
+    </label>
+  );
+}

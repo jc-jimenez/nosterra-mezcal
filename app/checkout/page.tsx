@@ -6,7 +6,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ShoppingBag, ShieldCheck, Truck } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
-import { STORE_CONFIG, formatMXN } from "@/lib/store-config";
+import { useStoreSettings } from "@/hooks/useStoreSettings";
+import { formatMXN } from "@/lib/store-config";
 
 const inputClass =
   "w-full border border-gold/20 bg-obsidian/60 px-4 py-3 font-body text-sm text-ivory placeholder:text-muted/60 focus:border-gold focus:outline-none transition-colors";
@@ -44,6 +45,7 @@ const EMPTY: Form = {
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, subtotal, clear } = useCart();
+  const settings = useStoreSettings();
   const [mounted, setMounted] = useState(false);
   const [form, setForm] = useState<Form>(EMPTY);
   const [done, setDone] = useState(false);
@@ -51,7 +53,7 @@ export default function CheckoutPage() {
   useEffect(() => setMounted(true), []);
 
   const total = mounted ? subtotal() : 0;
-  const freeShip = total >= STORE_CONFIG.freeShippingFrom;
+  const freeShip = total >= settings.freeShippingFrom;
   const outsideMexico = form.pais !== "México";
 
   function set<K extends keyof Form>(k: K, v: string) {
@@ -82,7 +84,7 @@ export default function CheckoutPage() {
       (form.referencias ? `Referencias: ${form.referencias}\n` : "") +
       `\n¿Me confirman disponibilidad, costo de envío y forma de pago? Gracias.`;
 
-    const url = `https://wa.me/${STORE_CONFIG.WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
+    const url = `https://wa.me/${settings.whatsappNumber}?text=${encodeURIComponent(msg)}`;
     window.open(url, "_blank");
     clear();
     setDone(true);
@@ -215,7 +217,7 @@ export default function CheckoutPage() {
               </div>
             </div>
             <p className="mt-4 flex items-center gap-1.5 font-body text-[11px] text-muted/70">
-              <Truck className="h-3.5 w-3.5 text-gold" /> {STORE_CONFIG.shippingNote}
+              <Truck className="h-3.5 w-3.5 text-gold" /> {settings.shippingNote}
             </p>
           </aside>
         </div>

@@ -3,6 +3,7 @@ import { Cormorant_Garamond, Jost } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { AgeGate } from "@/components/layout/AgeGate";
+import { ConvexClientProvider } from "./ConvexClientProvider";
 
 const display = Cormorant_Garamond({
   subsets: ["latin"],
@@ -58,8 +59,10 @@ export default function RootLayout({
       className={`${display.variable} ${body.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-obsidian text-ivory font-body">
-        <AgeGate />
-        {children}
+        <ConvexClientProvider>
+          <AgeGate />
+          {children}
+        </ConvexClientProvider>
         <Analytics />
       </body>
     </html>

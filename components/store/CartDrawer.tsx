@@ -5,17 +5,19 @@ import Image from "next/image";
 import Link from "next/link";
 import { X, Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
-import { STORE_CONFIG, formatMXN } from "@/lib/store-config";
+import { useStoreSettings } from "@/hooks/useStoreSettings";
+import { formatMXN } from "@/lib/store-config";
 
 export function CartDrawer() {
   const { items, isOpen, close, setQty, remove, subtotal, count } = useCart();
+  const settings = useStoreSettings();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
   // Evitar mismatch de hidratación con el carrito persistido
   const total = mounted ? subtotal() : 0;
   const n = mounted ? count() : 0;
-  const freeShip = total >= STORE_CONFIG.freeShippingFrom;
+  const freeShip = total >= settings.freeShippingFrom;
 
   return (
     <>
@@ -139,8 +141,8 @@ export function CartDrawer() {
             <p className="mb-4 font-body text-xs text-muted/70">
               {freeShip
                 ? "🎉 ¡Tu pedido califica para envío gratis!"
-                : `${STORE_CONFIG.shippingNote} · Envío gratis desde ${formatMXN(
-                    STORE_CONFIG.freeShippingFrom
+                : `${settings.shippingNote} · Envío gratis desde ${formatMXN(
+                    settings.freeShippingFrom
                   )}`}
             </p>
             <Link

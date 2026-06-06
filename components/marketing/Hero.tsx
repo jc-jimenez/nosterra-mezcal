@@ -4,19 +4,23 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ShoppingBag, Truck } from "lucide-react";
-import { featuredProduct } from "@/lib/products";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { useCart } from "@/hooks/useCart";
-import { STORE_CONFIG, formatMXN } from "@/lib/store-config";
+import { useStoreSettings } from "@/hooks/useStoreSettings";
+import { formatMXN } from "@/lib/store-config";
 
 export function Hero() {
   const add = useCart((s) => s.add);
+  const settings = useStoreSettings();
+  const products = useQuery(api.products.listActive);
+  const featured = products?.find((p) => p.featured) ?? products?.[0];
 
   return (
     <section
       id="top"
       className="relative flex min-h-screen items-center overflow-hidden"
     >
-      {/* Fondo */}
       <Image
         src="/images/hero-campo.png"
         alt="Botella NOSTERRA en un campo de agave al atardecer en Oaxaca"
@@ -27,7 +31,6 @@ export function Hero() {
       <div className="absolute inset-0 bg-gradient-to-r from-obsidian via-obsidian/85 to-obsidian/30" />
       <div className="absolute inset-0 bg-gradient-to-t from-obsidian via-transparent to-obsidian/60" />
 
-      {/* Contenido — alineado a la izquierda, enfoque comercial */}
       <div className="relative z-10 mx-auto w-full max-w-7xl px-6 lg:px-10">
         <div className="max-w-xl">
           <motion.div
@@ -62,33 +65,36 @@ export function Hero() {
             tahona de piedra y alambique de cobre. Llévalo a tu mesa.
           </motion.p>
 
-          {/* Precio + CTA */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.9, delay: 0.6 }}
             className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4"
           >
-            <div>
-              <p className="font-body text-[11px] uppercase tracking-[0.2em] text-muted">
-                Desde
-              </p>
-              <p className="font-display text-4xl font-light text-ivory">
-                {formatMXN(featuredProduct.price)}
-                <span className="ml-1 font-body text-sm text-muted">MXN</span>
-              </p>
-            </div>
+            {featured && (
+              <div>
+                <p className="font-body text-[11px] uppercase tracking-[0.2em] text-muted">
+                  Desde
+                </p>
+                <p className="font-display text-4xl font-light text-ivory">
+                  {formatMXN(featured.price)}
+                  <span className="ml-1 font-body text-sm text-muted">MXN</span>
+                </p>
+              </div>
+            )}
             <div className="flex flex-col gap-3 sm:flex-row">
               <button
+                disabled={!featured}
                 onClick={() =>
+                  featured &&
                   add({
-                    slug: featuredProduct.slug,
-                    name: featuredProduct.name,
-                    price: featuredProduct.price,
-                    image: featuredProduct.image,
+                    slug: featured.slug,
+                    name: featured.name,
+                    price: featured.price,
+                    image: featured.image,
                   })
                 }
-                className="flex items-center justify-center gap-2 border border-gold bg-gold px-8 py-3.5 font-body text-sm uppercase tracking-[0.15em] text-obsidian transition-colors hover:bg-gold-light"
+                className="flex items-center justify-center gap-2 border border-gold bg-gold px-8 py-3.5 font-body text-sm uppercase tracking-[0.15em] text-obsidian transition-colors hover:bg-gold-light disabled:opacity-50"
               >
                 <ShoppingBag className="h-4 w-4" />
                 Comprar ahora
@@ -102,7 +108,6 @@ export function Hero() {
             </div>
           </motion.div>
 
-          {/* Trust */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -111,7 +116,7 @@ export function Hero() {
           >
             <span className="flex items-center gap-1.5">
               <Truck className="h-3.5 w-3.5 text-gold" />
-              {STORE_CONFIG.shippingNote}
+              {settings.shippingNote}
             </span>
             <span>· 100% agave</span>
             <span>· Hecho en México</span>
