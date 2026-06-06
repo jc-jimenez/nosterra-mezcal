@@ -62,6 +62,16 @@ export default function CheckoutPage() {
 
   useEffect(() => setMounted(true), []);
 
+  // Autoselecciona el estado según el C.P. — funciona también con el
+  // autocompletado del navegador (no solo al teclear).
+  useEffect(() => {
+    const est = estadoFromCP(form.cp);
+    if (est && est !== form.estado) {
+      setForm((f) => ({ ...f, estado: est }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.cp]);
+
   const subtotalAmount = mounted ? subtotal() : 0;
 
   // Validación reactiva del cupón (se recalcula si cambia el subtotal)
