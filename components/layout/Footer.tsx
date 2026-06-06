@@ -76,12 +76,15 @@ export function Footer() {
               © {new Date().getFullYear()} NOSTERRA Mezcal · Casa Jiménez Elixirs
               &amp; Spirits.
             </span>
-            <div className="flex gap-5">
+            <div className="flex flex-wrap gap-5">
               <Link href="/privacidad" className="hover:text-ivory">
                 Privacidad
               </Link>
               <Link href="/terminos" className="hover:text-ivory">
                 Términos
+              </Link>
+              <Link href="/terminos-embajadores" className="hover:text-ivory">
+                Términos de embajadores
               </Link>
             </div>
           </div>

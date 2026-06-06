@@ -177,7 +177,10 @@ function ApplyForm() {
           <button type="submit" disabled={submitting} className="w-full bg-gold px-6 py-3.5 font-body text-sm uppercase tracking-[0.15em] text-obsidian transition-colors hover:bg-gold-light disabled:opacity-50">
             {submitting ? "Enviando…" : "Postularme"}
           </button>
-          <p className="text-center font-body text-[11px] text-muted/60">* Campos obligatorios. Revisamos cada solicitud y te daremos un código y un PIN.</p>
+          <p className="text-center font-body text-[11px] text-muted/60">
+            * Campos obligatorios. Al postularte aceptas los{" "}
+            <a href="/terminos-embajadores" target="_blank" className="text-gold/80 underline hover:text-gold">Términos del Programa de Embajadores</a>.
+          </p>
         </form>
       )}
     </div>
