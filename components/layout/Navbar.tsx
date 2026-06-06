@@ -6,10 +6,10 @@ import { ShoppingBag, Crown } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
 
 const links = [
-  { href: "#tienda", label: "Tienda" },
-  { href: "#edicion", label: "Edición Limitada" },
-  { href: "#proceso", label: "Proceso" },
-  { href: "#contacto", label: "Contacto" },
+  { href: "/#tienda", label: "Tienda" },
+  { href: "/#edicion", label: "Edición Limitada" },
+  { href: "/#proceso", label: "Proceso" },
+  { href: "/#contacto", label: "Contacto" },
 ];
 
 export function Navbar() {
@@ -39,7 +39,7 @@ export function Navbar() {
     >
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-10">
         {/* Wordmark */}
-        <Link href="#top" className="group flex flex-col leading-none">
+        <Link href="/" className="group flex flex-col leading-none">
           <span className="font-display text-2xl font-light tracking-[0.2em] text-ivory transition-colors group-hover:text-gold">
             NOSTERRA
           </span>
@@ -71,7 +71,7 @@ export function Navbar() {
 
         <div className="flex items-center gap-4">
           <Link
-            href="#tienda"
+            href="/#tienda"
             className="hidden border border-gold/60 px-5 py-2 font-body text-xs uppercase tracking-[0.18em] text-gold transition-colors hover:bg-gold hover:text-obsidian sm:block"
           >
             Comprar
@@ -126,7 +126,7 @@ export function Navbar() {
               <Crown className="h-4 w-4" /> Sé Embajador
             </Link>
             <Link
-              href="#tienda"
+              href="/#tienda"
               onClick={() => setOpen(false)}
               className="border border-gold/60 px-5 py-3 text-center font-body text-sm uppercase tracking-[0.18em] text-gold"
             >
