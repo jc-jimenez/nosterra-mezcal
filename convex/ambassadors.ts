@@ -131,6 +131,50 @@ export const approve = mutation({
   },
 });
 
+// Alta manual por el admin (queda activo de inmediato con su cupón)
+export const adminCreate = mutation({
+  args: {
+    adminKey: v.string(),
+    name: v.string(),
+    email: v.string(),
+    tier: v.union(v.literal("normal"), v.literal("plata"), v.literal("oro")),
+    customCode: v.optional(v.string()),
+  },
+  handler: async (ctx, { adminKey, name, email, tier, customCode }) => {
+    assertAdmin(adminKey);
+    const mail = email.trim().toLowerCase();
+    const existing = await ctx.db.query("ambassadors").withIndex("by_email", (q) => q.eq("email", mail)).unique();
+    if (existing) throw new Error("Ya existe un embajador con ese correo");
+
+    const cfg = await getTierConfig(ctx);
+    let code = customCode?.trim().toUpperCase().replace(/[^A-Z0-9]/g, "") || "";
+    if (code) {
+      const taken =
+        (await ctx.db.query("ambassadors").withIndex("by_code", (q) => q.eq("code", code)).unique()) ||
+        (await ctx.db.query("coupons").withIndex("by_code", (q) => q.eq("code", code)).unique());
+      if (taken) throw new Error(`El código ${code} ya está en uso`);
+    } else {
+      code = await uniqueCode(ctx, name);
+    }
+
+    const id = await ctx.db.insert("ambassadors", {
+      name: name.trim(),
+      email: mail,
+      code,
+      tier,
+      commissionPct: commissionForTier(tier, cfg),
+      customerDiscountPct: cfg.customerDiscount,
+      accruedCommission: 0,
+      paidCommission: 0,
+      salesCount: 0,
+      isActive: true,
+      status: "active",
+    });
+    await createAmbassadorCoupon(ctx, id, code, cfg.customerDiscount, name.trim());
+    return { code };
+  },
+});
+
 export const reject = mutation({
   args: { adminKey: v.string(), id: v.id("ambassadors") },
   handler: async (ctx, { adminKey, id }) => {

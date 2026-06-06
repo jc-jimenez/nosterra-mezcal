@@ -554,7 +554,29 @@ function AmbassadorsCard({ adminKey }: { adminKey: string }) {
   const setTier = useMutation(api.ambassadors.setTier);
   const payCommission = useMutation(api.ambassadors.payCommission);
   const remove = useMutation(api.ambassadors.remove);
+  const adminCreate = useMutation(api.ambassadors.adminCreate);
   const [payResult, setPayResult] = useState<{ name: string; code: string; amount: number } | null>(null);
+
+  // Alta manual
+  const [showForm, setShowForm] = useState(false);
+  const [fName, setFName] = useState("");
+  const [fEmail, setFEmail] = useState("");
+  const [fTier, setFTier] = useState<"normal" | "plata" | "oro">("normal");
+  const [fCode, setFCode] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  async function createAmb() {
+    if (!fName.trim() || !fEmail.trim()) return;
+    setCreating(true);
+    try {
+      await adminCreate({ adminKey, name: fName, email: fEmail, tier: fTier, customCode: fCode || undefined });
+      setFName(""); setFEmail(""); setFTier("normal"); setFCode(""); setShowForm(false);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Error");
+    } finally {
+      setCreating(false);
+    }
+  }
 
   const pending = (ambassadors ?? []).filter((a) => a.status === "pending");
   const others = (ambassadors ?? []).filter((a) => a.status !== "pending");
@@ -569,8 +591,33 @@ function AmbassadorsCard({ adminKey }: { adminKey: string }) {
     <section className="rounded-2xl border border-neutral-200 bg-white">
       <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-4">
         <h2 className="flex items-center gap-2 font-semibold text-neutral-900"><Crown className="h-4 w-4 text-amber-600" /> Embajadores de marca</h2>
-        <a href="/embajadores" target="_blank" className="text-sm text-amber-600 hover:text-amber-700">Ver página pública ↗</a>
+        <div className="flex items-center gap-4">
+          <a href="/embajadores" target="_blank" className="text-sm text-amber-600 hover:text-amber-700">Página pública ↗</a>
+          <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700">
+            <Plus className="h-4 w-4" /> Nuevo embajador
+          </button>
+        </div>
       </div>
+
+      {showForm && (
+        <div className="space-y-4 border-b border-neutral-100 bg-neutral-50 px-6 py-5">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Field label="Nombre"><input className={input} value={fName} onChange={(e) => setFName(e.target.value)} /></Field>
+            <Field label="Correo"><input type="email" className={input} value={fEmail} onChange={(e) => setFEmail(e.target.value)} /></Field>
+            <Field label="Nivel">
+              <select className={input} value={fTier} onChange={(e) => setFTier(e.target.value as typeof fTier)}>
+                <option value="normal">Normal</option>
+                <option value="plata">Plata</option>
+                <option value="oro">Oro</option>
+              </select>
+            </Field>
+            <Field label="Código (opcional, se genera solo)"><input className={input} value={fCode} onChange={(e) => setFCode(e.target.value.toUpperCase())} placeholder="MARIA" /></Field>
+          </div>
+          <button onClick={createAmb} disabled={creating || !fName.trim() || !fEmail.trim()} className="flex items-center gap-2 rounded-lg bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50">
+            <Save className="h-4 w-4" /> {creating ? "Creando..." : "Crear embajador (activo)"}
+          </button>
+        </div>
+      )}
 
       {payResult && (
         <div className="mx-6 mt-4 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
