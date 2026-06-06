@@ -10,7 +10,7 @@ import { CartDrawer } from "@/components/store/CartDrawer";
 import { Sparkles, Gift, TrendingUp, Check, Copy, Crown } from "lucide-react";
 
 const inputClass =
-  "w-full border border-gold/20 bg-obsidian/60 px-4 py-3 font-body text-sm text-ivory placeholder:text-muted/60 focus:border-gold focus:outline-none transition-colors";
+  "w-full border border-gold/30 bg-obsidian/60 px-4 py-3 font-body text-sm text-ivory placeholder:text-ivory/55 focus:border-gold focus:outline-none transition-colors";
 
 const TIER_LABEL: Record<string, string> = { normal: "Normal", plata: "Plata", oro: "Oro" };
 

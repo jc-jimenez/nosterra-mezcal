@@ -1,6 +1,7 @@
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 
 function assertAdmin(key: string) {
   const expected = process.env.ADMIN_PASSWORD;
@@ -124,6 +125,12 @@ export const apply = mutation({
       salesAmount: 0,
       isActive: false,
       status: "pending",
+    });
+    // Correo: solicitud recibida / en revisión
+    await ctx.scheduler.runAfter(0, internal.emails.sendAmbassadorEmail, {
+      to: mail,
+      name: fullName,
+      type: "pending",
     });
     return { ok: true as const, alreadyExists: false, code, pin, status: "pending" as const };
   },
@@ -331,6 +338,13 @@ export const approve = mutation({
     const pin = a.pin ?? genPin();
     await ctx.db.patch(id, { status: "active", isActive: true, pin });
     await createAmbassadorCoupon(ctx, id, a.code, a.customerDiscountPct, a.name);
+    // Correo: cuenta aprobada y lista para vender
+    await ctx.scheduler.runAfter(0, internal.emails.sendAmbassadorEmail, {
+      to: a.email,
+      name: a.name,
+      type: "approved",
+      code: a.code,
+    });
     return { code: a.code, pin };
   },
 });
@@ -388,6 +402,13 @@ export const adminCreate = mutation({
       status: "active",
     });
     await createAmbassadorCoupon(ctx, id, code, cfg.customerDiscount, name.trim());
+    // Correo: cuenta creada y lista para vender
+    await ctx.scheduler.runAfter(0, internal.emails.sendAmbassadorEmail, {
+      to: mail,
+      name: name.trim(),
+      type: "approved",
+      code,
+    });
     return { code, pin };
   },
 });
