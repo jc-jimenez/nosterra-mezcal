@@ -70,6 +70,119 @@ function approvedEmail(name: string, code: string) {
   };
 }
 
+function orderConfirmationEmail(
+  customerName: string,
+  orderNumber: string,
+  items: { name: string; qty: number; price: number }[],
+  subtotal: number,
+  shipping: number,
+  discount: number,
+  total: number,
+  address: { calle: string; numero: string; colonia: string; cp: string; ciudad: string; estado: string }
+) {
+  const first = customerName.split(" ")[0] || "cliente";
+  const itemsHtml = items
+    .map(
+      (i) =>
+        `<tr>
+          <td style="padding:8px 0;color:#3a3a34;font-size:14px">${i.name}</td>
+          <td style="padding:8px 0;color:#3a3a34;font-size:14px;text-align:center">×${i.qty}</td>
+          <td style="padding:8px 0;color:#3a3a34;font-size:14px;text-align:right">$${(i.price * i.qty).toLocaleString("es-MX")}</td>
+        </tr>`
+    )
+    .join("");
+
+  return {
+    subject: `Pedido confirmado ${orderNumber} · NOSTERRA Mezcal`,
+    html: layout(
+      `¡Gracias por tu pedido, ${first}!`,
+      `<p style="font-size:15px;line-height:1.7;color:#3a3a34;margin:0 0 20px">
+        Tu pago fue aprobado y tu pedido <strong>${orderNumber}</strong> está confirmado.
+        Nuestro equipo lo preparará y te notificaremos cuando sea enviado.
+      </p>
+
+      <div style="background:#f9f7f4;border-radius:10px;padding:18px 20px;margin-bottom:20px">
+        <p style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#9a9486;margin:0 0 12px">Resumen de tu pedido</p>
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="border-bottom:1px solid #e8e0d0">
+              <th style="padding:6px 0;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#9a9486;text-align:left;font-weight:400">Producto</th>
+              <th style="padding:6px 0;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#9a9486;text-align:center;font-weight:400">Cant.</th>
+              <th style="padding:6px 0;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#9a9486;text-align:right;font-weight:400">Total</th>
+            </tr>
+          </thead>
+          <tbody style="border-bottom:1px solid #e8e0d0">${itemsHtml}</tbody>
+        </table>
+        <table style="width:100%;margin-top:12px">
+          <tr><td style="font-size:13px;color:#6a6458;padding:3px 0">Subtotal</td><td style="font-size:13px;color:#6a6458;text-align:right">$${subtotal.toLocaleString("es-MX")}</td></tr>
+          <tr><td style="font-size:13px;color:#6a6458;padding:3px 0">Envío</td><td style="font-size:13px;color:#6a6458;text-align:right">${shipping === 0 ? "Gratis" : "$" + shipping.toLocaleString("es-MX")}</td></tr>
+          ${discount > 0 ? `<tr><td style="font-size:13px;color:#2d7a2d;padding:3px 0">Descuento</td><td style="font-size:13px;color:#2d7a2d;text-align:right">-$${discount.toLocaleString("es-MX")}</td></tr>` : ""}
+          <tr style="border-top:1px solid #e8e0d0">
+            <td style="font-size:16px;font-weight:700;color:${DARK};padding:8px 0 0">Total pagado</td>
+            <td style="font-size:16px;font-weight:700;color:${DARK};text-align:right;padding:8px 0 0">$${total.toLocaleString("es-MX")} MXN</td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="background:#f9f7f4;border-radius:10px;padding:18px 20px;margin-bottom:20px">
+        <p style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#9a9486;margin:0 0 8px">Dirección de entrega</p>
+        <p style="font-size:14px;color:#3a3a34;margin:0;line-height:1.7">
+          ${address.calle} ${address.numero}, ${address.colonia}<br/>
+          C.P. ${address.cp}, ${address.ciudad}, ${address.estado}
+        </p>
+      </div>
+
+      <p style="font-size:14px;line-height:1.7;color:#6a6458;margin:0 0 6px">
+        El tiempo estimado de entrega es de <strong>3 a 5 días hábiles</strong>.
+        Si tienes alguna duda escríbenos a
+        <a href="mailto:hola@nosterramezcal.com" style="color:${BRAND}">hola@nosterramezcal.com</a>
+        o a nuestro WhatsApp.
+      </p>
+
+      <div style="text-align:center;margin:24px 0 6px">
+        <a href="https://www.nosterramezcal.com" style="display:inline-block;background:${BRAND};color:${DARK};text-decoration:none;padding:13px 30px;border-radius:8px;font-size:14px;font-weight:600;letter-spacing:1px">Visitar la tienda</a>
+      </div>`
+    ),
+  };
+}
+
+export const sendOrderConfirmation = internalAction({
+  args: {
+    to: v.string(),
+    customerName: v.string(),
+    orderNumber: v.string(),
+    items: v.array(v.object({ name: v.string(), qty: v.number(), price: v.number() })),
+    subtotal: v.number(),
+    shipping: v.number(),
+    discount: v.number(),
+    total: v.number(),
+    address: v.object({
+      calle: v.string(), numero: v.string(), colonia: v.string(),
+      cp: v.string(), ciudad: v.string(), estado: v.string(),
+    }),
+  },
+  handler: async (_ctx, { to, customerName, orderNumber, items, subtotal, shipping, discount, total, address }) => {
+    const apiKey = process.env.RESEND_API_KEY;
+    const from = process.env.EMAIL_FROM || "NOSTERRA <onboarding@resend.dev>";
+    if (!apiKey) {
+      console.warn("RESEND_API_KEY no configurada — se omite el correo de confirmación.");
+      return { ok: false, skipped: true };
+    }
+    const tpl = orderConfirmationEmail(customerName, orderNumber, items, subtotal, shipping, discount, total, address);
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from, to: [to], subject: tpl.subject, html: tpl.html }),
+    });
+    if (!res.ok) {
+      const detail = await res.text();
+      console.error("Error al enviar correo de confirmación:", res.status, detail);
+      return { ok: false, error: detail };
+    }
+    return { ok: true };
+  },
+});
+
 export const sendAmbassadorEmail = internalAction({
   args: {
     to: v.string(),

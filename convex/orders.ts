@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { promoteIfEligible } from "./ambassadors";
+import { internal } from "./_generated/api";
 
 // Secreto compartido servidor↔Convex para mutaciones sensibles (webhook).
 function assertServer(secret: string) {
@@ -149,6 +150,26 @@ export const markPayment = mutation({
       }
 
       await ctx.db.patch(order._id, { stockApplied: true });
+
+      // Correo de confirmación al cliente
+      await ctx.scheduler.runAfter(0, internal.emails.sendOrderConfirmation, {
+        to: order.customerEmail,
+        customerName: order.customerName,
+        orderNumber: order.orderNumber,
+        items: order.items.map((i) => ({ name: i.name, qty: i.qty, price: i.price })),
+        subtotal: order.subtotal,
+        shipping: order.shipping,
+        discount: order.discount ?? 0,
+        total: order.total,
+        address: {
+          calle: order.shippingAddress.calle,
+          numero: order.shippingAddress.numero,
+          colonia: order.shippingAddress.colonia,
+          cp: order.shippingAddress.cp,
+          ciudad: order.shippingAddress.ciudad,
+          estado: order.shippingAddress.estado,
+        },
+      });
     }
 
     return { ok: true };
