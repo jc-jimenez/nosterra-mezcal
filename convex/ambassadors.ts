@@ -220,7 +220,7 @@ export const getAccount = query({
       .query("orders")
       .withIndex("by_ambassador", (q) => q.eq("ambassadorId", a._id))
       .order("desc")
-      .take(20);
+      .take(100);
     const referrals = orders
       .filter((o) => o.paymentStatus === "approved" || o.status !== "pending")
       .map((o) => {
@@ -228,6 +228,7 @@ export const getAccount = query({
         const parts = o.customerName.trim().split(/\s+/);
         const masked = parts[0] + (parts[1] ? ` ${parts[1][0]}.` : "");
         return {
+          orderNumber: o.orderNumber,
           customer: masked,
           city: o.shippingAddress.ciudad,
           amount: o.subtotal,

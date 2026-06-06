@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useStoreSettings } from "@/hooks/useStoreSettings";
@@ -12,7 +13,7 @@ import { Sparkles, Gift, TrendingUp, Check, Copy, Crown, ChevronDown, MessageCir
 const inputClass =
   "w-full border border-gold/30 bg-obsidian/60 px-4 py-3 font-body text-sm text-ivory placeholder:text-ivory/55 focus:border-gold focus:outline-none transition-colors";
 
-const TIER_LABEL: Record<string, string> = { normal: "Normal", plata: "Plata", oro: "Oro" };
+const EMB_SESSION = "nosterra_emb_session";
 
 export default function EmbajadoresPage() {
   return (
@@ -260,276 +261,51 @@ function ApplyForm() {
   );
 }
 
-const TIER_RULES: Record<string, string> = {
-  normal: "Canje por producto (cupón de descuento).",
-  plata: "Hasta 50% en efectivo por transferencia + el resto en cupón.",
-  oro: "Como tú quieras: efectivo y/o cupón, sin límite.",
-};
-
 function AccountPanel() {
-  const redeem = useMutation(api.ambassadors.redeem);
-  const updateProfile = useMutation(api.ambassadors.updateProfile);
+  const router = useRouter();
   const [lookupEmail, setLookupEmail] = useState("");
   const [lookupPin, setLookupPin] = useState("");
   const [queryEmail, setQueryEmail] = useState("");
   const [queryPin, setQueryPin] = useState("");
+  const [checking, setChecking] = useState(false);
   const account = useQuery(
     api.ambassadors.getAccount,
     queryEmail && queryPin ? { email: queryEmail, pin: queryPin } : "skip"
   );
-  const [copied, setCopied] = useState(false);
-  const [cashInput, setCashInput] = useState("");
-  const [redeemResult, setRedeemResult] = useState<{ couponCode: string | null; couponAmount: number; cashAmount: number } | null>(null);
-  const [redeemErr, setRedeemErr] = useState("");
-  const [showBank, setShowBank] = useState(false);
 
-  function copyText(text: string) {
-    navigator.clipboard?.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  useEffect(() => {
+    if (!checking) return;
+    if (account === undefined) return; // cargando
+    if (account) {
+      sessionStorage.setItem(EMB_SESSION, JSON.stringify({ email: queryEmail, pin: queryPin }));
+      router.push("/embajadores/panel");
+    } else {
+      setChecking(false);
+    }
+  }, [account, checking, queryEmail, queryPin, router]);
+
+  function enter() {
+    setQueryEmail(lookupEmail.trim().toLowerCase());
+    setQueryPin(lookupPin.trim());
+    setChecking(true);
   }
 
-  async function doRedeem(cash: number) {
-    setRedeemErr("");
-    const r = await redeem({ email: queryEmail, pin: queryPin, cashAmount: cash });
-    if (r.ok) { setRedeemResult({ couponCode: r.couponCode, couponAmount: r.couponAmount, cashAmount: r.cashAmount }); setCashInput(""); }
-    else setRedeemErr(r.error);
-  }
+  const failed = !checking && Boolean(queryEmail) && Boolean(queryPin) && account === null;
 
   return (
     <div className="rounded-2xl border border-gold/15 bg-smoke p-6 sm:p-7">
       <h2 className="font-display text-2xl text-ivory">Mi cuenta de embajador</h2>
-      <p className="mt-2 font-body text-sm text-muted">Entra con tu correo y PIN para ver y redimir tus comisiones.</p>
+      <p className="mt-2 font-body text-sm text-muted">Entra con tu correo y PIN para ver tus ventas y redimir tus comisiones.</p>
       <div className="mt-6 space-y-2">
         <input type="email" placeholder="Tu correo" className={inputClass} value={lookupEmail} onChange={(e) => setLookupEmail(e.target.value)} />
         <div className="flex gap-2">
-          <input inputMode="numeric" maxLength={6} placeholder="PIN (6 dígitos)" className={inputClass} value={lookupPin} onChange={(e) => setLookupPin(e.target.value.replace(/\D/g, ""))} />
-          <button onClick={() => { setQueryEmail(lookupEmail.trim().toLowerCase()); setQueryPin(lookupPin.trim()); setRedeemResult(null); setRedeemErr(""); }} className="border border-gold/40 px-5 font-body text-xs uppercase tracking-wide text-gold transition-colors hover:bg-gold hover:text-obsidian">
-            Entrar
+          <input inputMode="numeric" maxLength={6} placeholder="PIN (6 dígitos)" className={inputClass} value={lookupPin} onChange={(e) => setLookupPin(e.target.value.replace(/\D/g, ""))} onKeyDown={(e) => { if (e.key === "Enter") enter(); }} />
+          <button onClick={enter} disabled={checking || !lookupEmail || !lookupPin} className="border border-gold/40 px-5 font-body text-xs uppercase tracking-wide text-gold transition-colors hover:bg-gold hover:text-obsidian disabled:opacity-50">
+            {checking ? "..." : "Entrar"}
           </button>
         </div>
       </div>
-
-      {queryEmail && queryPin && account === null && (
-        <p className="mt-4 font-body text-sm text-red-300">Correo o PIN incorrectos. ¿Olvidaste tu PIN? Escríbenos.</p>
-      )}
-      {account && (
-        <div className="mt-6 space-y-4">
-          <div className="flex items-center justify-between rounded-xl border border-gold/15 bg-smoke px-4 py-3">
-            <div>
-              <p className="font-body text-[11px] uppercase tracking-wide text-muted">Tu código</p>
-              <p className="font-mono text-xl tracking-widest text-gold">{account.code}</p>
-            </div>
-            <button onClick={() => copyText(account.code)} className="text-muted hover:text-gold">
-              {copied ? <Check className="h-5 w-5 text-emerald-400" /> : <Copy className="h-5 w-5" />}
-            </button>
-          </div>
-
-          {/* Compartir por WhatsApp */}
-          {account.isActive && (
-            <a
-              href={`https://wa.me/?text=${encodeURIComponent(`¡Prueba NOSTERRA Mezcal! 🥃 Usa mi código ${account.code} y obtén ${account.customerDiscountPct}% de descuento en tu compra. Pídelo aquí: https://www.nosterramezcal.com`)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 font-body text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20"
-            >
-              <MessageCircle className="h-4 w-4" /> Compartir mi código por WhatsApp
-            </a>
-          )}
-
-          <div className="grid grid-cols-3 gap-3 text-center">
-            <Stat label="Nivel" value={TIER_LABEL[account.tier] ?? account.tier} />
-            <Stat label="Ventas" value={String(account.salesCount)} />
-            <Stat label="Comisión" value={`${account.commissionPct}%`} />
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-center">
-            <Stat label="Por redimir" value={`$${account.accruedCommission.toLocaleString("es-MX")}`} highlight />
-            <Stat label="Redimido" value={`$${account.paidCommission.toLocaleString("es-MX")}`} />
-          </div>
-
-          {/* Reglas + progreso de nivel */}
-          <div className="rounded-xl border border-gold/10 bg-smoke px-4 py-3">
-            <p className="font-body text-[11px] text-muted"><span className="text-gold">Nivel {TIER_LABEL[account.tier]}:</span> {TIER_RULES[account.tier]}</p>
-            {account.nextTier && (
-              <p className="mt-1.5 font-body text-[11px] text-muted/70">
-                {account.thresholdMetric === "amount"
-                  ? `Te faltan $${Math.max(0, account.nextTarget - account.metricValue).toLocaleString("es-MX")} en ventas para subir a ${TIER_LABEL[account.nextTier]}.`
-                  : `Te faltan ${Math.max(0, account.nextTarget - account.metricValue)} ventas para subir a ${TIER_LABEL[account.nextTier]}.`}
-              </p>
-            )}
-          </div>
-
-          {/* Datos bancarios */}
-          <BankForm account={account} email={queryEmail} pin={queryPin} updateProfile={updateProfile} show={showBank} setShow={setShowBank} />
-
-          {/* Canje */}
-          {redeemResult ? (
-            <div className="space-y-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-center">
-              <p className="font-body text-sm text-emerald-200">¡Comisión redimida!</p>
-              {redeemResult.cashAmount > 0 && (
-                <p className="font-body text-xs text-emerald-200/90">
-                  ${redeemResult.cashAmount.toLocaleString("es-MX")} se te pagará por <strong>transferencia</strong> a tu cuenta (lo procesamos pronto).
-                </p>
-              )}
-              {redeemResult.couponCode && (
-                <>
-                  <p className="font-body text-xs text-emerald-200/90">${redeemResult.couponAmount.toLocaleString("es-MX")} en este cupón:</p>
-                  <button onClick={() => copyText(redeemResult.couponCode!)} className="mx-auto flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-obsidian/40 px-4 py-2 font-mono text-lg tracking-widest text-emerald-200 hover:bg-obsidian/60">
-                    {redeemResult.couponCode} <Copy className="h-4 w-4" />
-                  </button>
-                </>
-              )}
-              <button onClick={() => setRedeemResult(null)} className="font-body text-[11px] text-muted/70 underline">Cerrar</button>
-            </div>
-          ) : account.isActive && account.accruedCommission > 0 ? (
-            <RedeemBox account={account} cashInput={cashInput} setCashInput={setCashInput} onRedeem={doRedeem} />
-          ) : (
-            <p className="font-body text-[11px] text-muted/70">
-              {account.isActive
-                ? `Comparte tu código "${account.code}": tus clientes obtienen ${account.customerDiscountPct}% de descuento y tú ganas ${account.commissionPct}% de comisión.`
-                : "Tu cuenta aún no está activa."}
-            </p>
-          )}
-          {redeemErr && <p className="font-body text-sm text-red-300">{redeemErr}</p>}
-
-          {/* Referidos: tus ventas */}
-          {account.referrals.length > 0 && (
-            <div className="rounded-xl border border-gold/10 bg-smoke px-4 py-3">
-              <p className="mb-2 font-body text-[11px] uppercase tracking-wide text-muted">Tus ventas ({account.referrals.length})</p>
-              <ul className="space-y-1.5">
-                {account.referrals.map((r, i) => (
-                  <li key={i} className="flex items-center justify-between font-body text-xs">
-                    <span className="text-muted">{r.customer} · {r.city}</span>
-                    <span className="text-ivory">${r.amount.toLocaleString("es-MX")} <span className="text-gold">(+${r.commission.toLocaleString("es-MX")})</span></span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Historial de pagos en efectivo */}
-          {account.payouts.length > 0 && (
-            <div className="rounded-xl border border-gold/10 bg-smoke px-4 py-3">
-              <p className="mb-2 font-body text-[11px] uppercase tracking-wide text-muted">Pagos en efectivo</p>
-              <ul className="space-y-1.5">
-                {account.payouts.map((p, i) => (
-                  <li key={i} className="flex items-center justify-between font-body text-xs text-muted">
-                    <span>${p.cashAmount.toLocaleString("es-MX")} · {new Date(p.createdAt).toLocaleDateString("es-MX")}</span>
-                    <span className={p.status === "paid" ? "text-emerald-400" : p.status === "rejected" ? "text-red-300" : "text-gold"}>
-                      {p.status === "paid" ? "Transferido" : p.status === "rejected" ? "Rechazado" : "Pendiente"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-type Account = NonNullable<ReturnType<typeof useQuery<typeof api.ambassadors.getAccount>>>;
-
-function RedeemBox({ account, cashInput, setCashInput, onRedeem }: {
-  account: Account; cashInput: string; setCashInput: (v: string) => void; onRedeem: (cash: number) => void;
-}) {
-  const total = Math.floor(account.accruedCommission);
-  const maxCash = Math.floor(total * account.maxCashPct);
-
-  if (account.maxCashPct === 0) {
-    // Normal — solo producto
-    return (
-      <button onClick={() => onRedeem(0)} className="w-full bg-gold px-6 py-3.5 font-body text-sm uppercase tracking-[0.15em] text-obsidian transition-colors hover:bg-gold-light">
-        Redimir ${total.toLocaleString("es-MX")} en cupón de producto
-      </button>
-    );
-  }
-
-  const cash = Math.min(maxCash, Math.max(0, Math.floor(Number(cashInput) || 0)));
-  const coupon = total - cash;
-  return (
-    <div className="space-y-3 rounded-xl border border-gold/15 bg-smoke p-4">
-      <p className="font-body text-xs text-muted">
-        Tienes <span className="text-gold">${total.toLocaleString("es-MX")}</span> por redimir.
-        {account.maxCashPct < 1
-          ? ` Puedes recibir hasta $${maxCash.toLocaleString("es-MX")} en efectivo (50%).`
-          : " Puedes recibir todo en efectivo, todo en cupón, o como prefieras."}
-      </p>
-      <label className="block">
-        <span className="mb-1 block font-body text-[11px] uppercase tracking-wide text-muted">Efectivo por transferencia (MXN)</span>
-        <input inputMode="numeric" placeholder="0" className={inputClass} value={cashInput} onChange={(e) => setCashInput(e.target.value.replace(/\D/g, ""))} />
-      </label>
-      <div className="flex gap-2">
-        <button type="button" onClick={() => setCashInput(String(maxCash))} className="rounded-md border border-gold/30 px-3 py-1 font-body text-[11px] text-gold hover:bg-gold/10">Máx efectivo</button>
-        <button type="button" onClick={() => setCashInput("0")} className="rounded-md border border-gold/30 px-3 py-1 font-body text-[11px] text-gold hover:bg-gold/10">Todo en cupón</button>
-      </div>
-      <div className="rounded-lg border border-gold/10 bg-obsidian/40 px-3 py-2 font-body text-xs text-muted">
-        Efectivo: <span className="text-ivory">${cash.toLocaleString("es-MX")}</span> · Cupón: <span className="text-ivory">${coupon.toLocaleString("es-MX")}</span>
-      </div>
-      {cash > 0 && !account.hasBankData && (
-        <p className="font-body text-[11px] text-amber-300">Para cobrar en efectivo, completa primero tus datos bancarios arriba.</p>
-      )}
-      <button
-        onClick={() => onRedeem(cash)}
-        disabled={cash > 0 && !account.hasBankData}
-        className="w-full bg-gold px-6 py-3 font-body text-sm uppercase tracking-[0.15em] text-obsidian transition-colors hover:bg-gold-light disabled:opacity-50"
-      >
-        Redimir ${total.toLocaleString("es-MX")}
-      </button>
-    </div>
-  );
-}
-
-function BankForm({ account, email, pin, updateProfile, show, setShow }: {
-  account: Account; email: string; pin: string;
-  updateProfile: ReturnType<typeof useMutation<typeof api.ambassadors.updateProfile>>;
-  show: boolean; setShow: (v: boolean) => void;
-}) {
-  const [b, setB] = useState({ titularCuenta: account.titularCuenta, clabe: account.clabe, banco: account.banco, rfc: account.rfc });
-  const set = (k: keyof typeof b) => (e: React.ChangeEvent<HTMLInputElement>) => setB((p) => ({ ...p, [k]: e.target.value }));
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  async function save() {
-    setSaving(true);
-    try {
-      await updateProfile({ email, pin, titularCuenta: b.titularCuenta, clabe: b.clabe, banco: b.banco, rfc: b.rfc });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="rounded-xl border border-gold/10 bg-smoke">
-      <button onClick={() => setShow(!show)} className="flex w-full items-center justify-between px-4 py-3 font-body text-xs uppercase tracking-wide text-muted hover:text-gold">
-        <span>Datos para cobrar en efectivo {account.hasBankData ? "✓" : ""}</span>
-        <span>{show ? "−" : "+"}</span>
-      </button>
-      {show && (
-        <div className="space-y-3 border-t border-gold/10 p-4">
-          <input placeholder="Titular de la cuenta" className={inputClass} value={b.titularCuenta} onChange={set("titularCuenta")} />
-          <input inputMode="numeric" placeholder="CLABE (18 dígitos)" className={inputClass} value={b.clabe} onChange={set("clabe")} />
-          <div className="grid grid-cols-2 gap-3">
-            <input placeholder="Banco" className={inputClass} value={b.banco} onChange={set("banco")} />
-            <input placeholder="RFC" className={inputClass} value={b.rfc} onChange={set("rfc")} />
-          </div>
-          <button onClick={save} disabled={saving} className="w-full border border-gold/40 px-5 py-2.5 font-body text-xs uppercase tracking-wide text-gold transition-colors hover:bg-gold hover:text-obsidian disabled:opacity-50">
-            {saving ? "Guardando…" : saved ? "Guardado ✓" : "Guardar datos bancarios"}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div className="rounded-xl border border-gold/10 bg-smoke px-3 py-3">
-      <p className="font-body text-[10px] uppercase tracking-wide text-muted">{label}</p>
-      <p className={`mt-0.5 font-display text-lg ${highlight ? "text-gold" : "text-ivory"}`}>{value}</p>
+      {failed && <p className="mt-4 font-body text-sm text-red-300">Correo o PIN incorrectos. ¿Olvidaste tu PIN? Escríbenos.</p>}
     </div>
   );
 }
