@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { Lock, Plus, Pencil, Trash2, Save, X, Upload, LogOut, Settings as Cog, Ticket, Power } from "lucide-react";
+import { Lock, Plus, Pencil, Trash2, Save, X, Upload, LogOut, Settings as Cog, Ticket, Power, Crown, Copy, DollarSign } from "lucide-react";
 
 const KEY_STORAGE = "nosterra_admin_key";
 
@@ -248,6 +248,9 @@ function AdminDashboard({ adminKey, onLogout }: { adminKey: string; onLogout: ()
 
         {/* Cupones */}
         <CouponsCard adminKey={adminKey} />
+
+        {/* Embajadores */}
+        <AmbassadorsCard adminKey={adminKey} />
       </main>
 
       {/* Editor (modal) */}
@@ -328,14 +331,18 @@ function SettingsCard({
   settings,
   onSave,
 }: {
-  settings: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost?: number; currency: string } | undefined;
-  onSave: (d: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost: number; currency: string }) => Promise<void>;
+  settings: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost?: number; currency: string; ambassador?: { tierNormal: number; tierPlata: number; tierOro: number; customerDiscount: number } } | undefined;
+  onSave: (d: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost: number; currency: string; ambassador: { tierNormal: number; tierPlata: number; tierOro: number; customerDiscount: number } }) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [wa, setWa] = useState("");
   const [note, setNote] = useState("");
   const [free, setFree] = useState("");
   const [cost, setCost] = useState("");
+  const [tNormal, setTNormal] = useState("2");
+  const [tPlata, setTPlata] = useState("3");
+  const [tOro, setTOro] = useState("5");
+  const [custDisc, setCustDisc] = useState("5");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -345,13 +352,25 @@ function SettingsCard({
       setNote(settings.shippingNote);
       setFree(String(settings.freeShippingFrom));
       setCost(String(settings.shippingCost ?? 150));
+      const amb = settings.ambassador;
+      setTNormal(String(amb?.tierNormal ?? 2));
+      setTPlata(String(amb?.tierPlata ?? 3));
+      setTOro(String(amb?.tierOro ?? 5));
+      setCustDisc(String(amb?.customerDiscount ?? 5));
     }
   }, [settings]);
 
   async function save() {
     setSaving(true); setSaved(false);
     try {
-      await onSave({ whatsappNumber: wa.trim(), shippingNote: note.trim(), freeShippingFrom: Number(free) || 0, shippingCost: Number(cost) || 0, currency: "MXN" });
+      await onSave({
+        whatsappNumber: wa.trim(), shippingNote: note.trim(),
+        freeShippingFrom: Number(free) || 0, shippingCost: Number(cost) || 0, currency: "MXN",
+        ambassador: {
+          tierNormal: Number(tNormal) || 0, tierPlata: Number(tPlata) || 0,
+          tierOro: Number(tOro) || 0, customerDiscount: Number(custDisc) || 0,
+        },
+      });
       setSaved(true); setTimeout(() => setSaved(false), 2000);
     } finally { setSaving(false); }
   }
@@ -370,6 +389,18 @@ function SettingsCard({
             <Field label="Envío gratis desde (MXN)"><input type="number" className={input} value={free} onChange={(e) => setFree(e.target.value)} /></Field>
             <Field label="Nota de envío"><input className={input} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
           </div>
+
+          <div className="border-t border-neutral-100 pt-4">
+            <p className="mb-3 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-amber-600"><Crown className="h-3.5 w-3.5" /> Comisiones de embajadores (%)</p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="Nivel Normal (%)"><input type="number" className={input} value={tNormal} onChange={(e) => setTNormal(e.target.value)} /></Field>
+              <Field label="Nivel Plata (%)"><input type="number" className={input} value={tPlata} onChange={(e) => setTPlata(e.target.value)} /></Field>
+              <Field label="Nivel Oro (%)"><input type="number" className={input} value={tOro} onChange={(e) => setTOro(e.target.value)} /></Field>
+              <Field label="Descuento al cliente (%)"><input type="number" className={input} value={custDisc} onChange={(e) => setCustDisc(e.target.value)} /></Field>
+            </div>
+            <p className="mt-2 text-xs text-neutral-400">El cambio aplica a nuevos embajadores y al reasignar nivel. El descuento al cliente aplica a embajadores nuevos.</p>
+          </div>
+
           <div className="flex items-center gap-3">
             <button onClick={save} disabled={saving} className="flex items-center gap-2 rounded-lg bg-neutral-900 px-5 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50">
               <Save className="h-4 w-4" /> {saving ? "Guardando..." : "Guardar configuración"}
@@ -508,6 +539,119 @@ function CouponsCard({ adminKey }: { adminKey: string }) {
                   </tr>
                 );
               })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AmbassadorsCard({ adminKey }: { adminKey: string }) {
+  const ambassadors = useQuery(api.ambassadors.listAll, { adminKey });
+  const approve = useMutation(api.ambassadors.approve);
+  const reject = useMutation(api.ambassadors.reject);
+  const setTier = useMutation(api.ambassadors.setTier);
+  const payCommission = useMutation(api.ambassadors.payCommission);
+  const remove = useMutation(api.ambassadors.remove);
+  const [payResult, setPayResult] = useState<{ name: string; code: string; amount: number } | null>(null);
+
+  const pending = (ambassadors ?? []).filter((a) => a.status === "pending");
+  const others = (ambassadors ?? []).filter((a) => a.status !== "pending");
+
+  async function pay(a: NonNullable<typeof ambassadors>[number]) {
+    const r = await payCommission({ adminKey, id: a._id });
+    if (r.code) setPayResult({ name: a.name, code: r.code, amount: r.amount });
+    else alert("Este embajador no tiene comisión por pagar.");
+  }
+
+  return (
+    <section className="rounded-2xl border border-neutral-200 bg-white">
+      <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-4">
+        <h2 className="flex items-center gap-2 font-semibold text-neutral-900"><Crown className="h-4 w-4 text-amber-600" /> Embajadores de marca</h2>
+        <a href="/embajadores" target="_blank" className="text-sm text-amber-600 hover:text-amber-700">Ver página pública ↗</a>
+      </div>
+
+      {payResult && (
+        <div className="mx-6 mt-4 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <p className="text-sm text-emerald-800">
+            Cupón de pago para <strong>{payResult.name}</strong> por ${payResult.amount.toLocaleString("es-MX")}:{" "}
+            <span className="font-mono font-semibold">{payResult.code}</span> — envíaselo.
+          </p>
+          <button onClick={() => { navigator.clipboard?.writeText(payResult.code); }} className="ml-3 text-emerald-700 hover:text-emerald-900"><Copy className="h-4 w-4" /></button>
+        </div>
+      )}
+
+      {/* Solicitudes pendientes */}
+      {pending.length > 0 && (
+        <div className="border-b border-neutral-100 px-6 py-4">
+          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-amber-600">Solicitudes por aprobar ({pending.length})</p>
+          <ul className="space-y-2">
+            {pending.map((a) => (
+              <li key={a._id} className="flex items-center gap-3 rounded-lg border border-neutral-200 px-4 py-3">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-neutral-900">{a.name}</p>
+                  <p className="text-xs text-neutral-500">{a.email} · código sugerido: <span className="font-mono">{a.code}</span></p>
+                </div>
+                <button onClick={() => approve({ adminKey, id: a._id })} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700">Aprobar</button>
+                <button onClick={() => reject({ adminKey, id: a._id })} className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-600 hover:bg-neutral-50">Rechazar</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Embajadores */}
+      {ambassadors === undefined ? (
+        <div className="p-6 space-y-2">{[1, 2].map((i) => <div key={i} className="h-14 animate-pulse rounded-lg bg-neutral-100" />)}</div>
+      ) : others.length === 0 ? (
+        <p className="py-10 text-center text-sm text-neutral-500">Aún no hay embajadores activos.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-neutral-400 border-b border-neutral-100">
+                <th className="px-6 py-3 font-medium">Embajador</th>
+                <th className="px-4 py-3 font-medium">Código</th>
+                <th className="px-4 py-3 font-medium">Nivel</th>
+                <th className="px-4 py-3 font-medium">Ventas</th>
+                <th className="px-4 py-3 font-medium">Por pagar</th>
+                <th className="px-4 py-3 font-medium text-right">Acción</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-50">
+              {others.map((a) => (
+                <tr key={a._id} className="hover:bg-neutral-50">
+                  <td className="px-6 py-3">
+                    <p className="font-medium text-neutral-900">{a.name}</p>
+                    <p className="text-xs text-neutral-500">{a.email}{a.status === "rejected" ? " · rechazado" : ""}</p>
+                  </td>
+                  <td className="px-4 py-3 font-mono text-neutral-800">{a.code}</td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={a.tier}
+                      onChange={(e) => setTier({ adminKey, id: a._id, tier: e.target.value as "normal" | "plata" | "oro" })}
+                      className="rounded-md border border-neutral-300 px-2 py-1 text-xs"
+                    >
+                      <option value="normal">Normal ({a.commissionPct}%)</option>
+                      <option value="plata">Plata</option>
+                      <option value="oro">Oro</option>
+                    </select>
+                  </td>
+                  <td className="px-4 py-3 text-neutral-700">{a.salesCount}</td>
+                  <td className="px-4 py-3 font-medium text-neutral-900">${a.accruedCommission.toLocaleString("es-MX")}</td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    {a.accruedCommission > 0 && (
+                      <button onClick={() => pay(a)} className="mr-2 inline-flex items-center gap-1 rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-700">
+                        <DollarSign className="h-3 w-3" /> Pagar
+                      </button>
+                    )}
+                    <button onClick={() => { if (confirm(`¿Eliminar al embajador ${a.name}?`)) remove({ adminKey, id: a._id }); }} className="inline-flex items-center text-xs text-red-500 hover:text-red-700">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

@@ -7,6 +7,7 @@ const DEFAULTS = {
   freeShippingFrom: 1500,
   shippingCost: 150,
   currency: "MXN",
+  ambassador: { tierNormal: 2, tierPlata: 3, tierOro: 5, customerDiscount: 5 },
 };
 
 function assertAdmin(key: string) {
@@ -31,6 +32,14 @@ export const upsert = mutation({
       freeShippingFrom: v.number(),
       shippingCost: v.number(),
       currency: v.string(),
+      ambassador: v.optional(
+        v.object({
+          tierNormal: v.number(),
+          tierPlata: v.number(),
+          tierOro: v.number(),
+          customerDiscount: v.number(),
+        })
+      ),
     }),
   },
   handler: async (ctx, { adminKey, data }) => {

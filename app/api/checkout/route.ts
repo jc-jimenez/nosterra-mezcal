@@ -63,6 +63,7 @@ export async function POST(request: Request) {
     let couponFreeShip = false;
     let couponCode: string | undefined;
     let ambassadorId: string | undefined;
+    let commission = 0;
     if (body.couponCode?.trim()) {
       const res = await convexServer.query(api.coupons.validate, { code: body.couponCode, subtotal });
       if (res.ok) {
@@ -70,6 +71,13 @@ export async function POST(request: Request) {
         couponFreeShip = res.freeShipping;
         couponCode = res.code;
         ambassadorId = res.ambassadorId ?? undefined;
+        // Comisión del embajador (si el cupón es de un embajador)
+        if (ambassadorId) {
+          const pct = await convexServer.query(api.ambassadors.getCommissionPct, {
+            id: ambassadorId as never,
+          });
+          commission = Math.round((subtotal * pct) / 100);
+        }
       }
     }
 
@@ -91,6 +99,7 @@ export async function POST(request: Request) {
       discount: discount || undefined,
       couponCode,
       ambassadorId: ambassadorId as never,
+      commission: commission || undefined,
       total,
     });
 

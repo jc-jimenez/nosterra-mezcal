@@ -27,10 +27,11 @@ export function Footer() {
             </h4>
             <ul className="mt-5 space-y-3 font-body text-sm text-muted">
               {[
-                { href: "#historia", label: "Historia" },
-                { href: "#proceso", label: "Proceso artesanal" },
-                { href: "#edicion", label: "Edición conmemorativa" },
-                { href: "#productos", label: "Comprar" },
+                { href: "/#historia", label: "Historia" },
+                { href: "/#proceso", label: "Proceso artesanal" },
+                { href: "/#edicion", label: "Edición conmemorativa" },
+                { href: "/#tienda", label: "Comprar" },
+                { href: "/embajadores", label: "Embajadores" },
               ].map((l) => (
                 <li key={l.href}>
                   <Link
