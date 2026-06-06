@@ -104,7 +104,10 @@ export const markPayment = mutation({
     await ctx.db.patch(order._id, {
       paymentId,
       paymentStatus,
-      status: approved ? "paid" : order.status,
+      status: approved ? "nuevo" : order.status,
+      statusHistory: approved
+        ? [...(order.statusHistory ?? []), { status: "nuevo", at: Date.now() }]
+        : order.statusHistory,
     });
 
     // Descontar stock una sola vez al aprobarse
@@ -143,6 +146,7 @@ export const markPayment = mutation({
             accruedCommission: amb.accruedCommission + order.commission,
             salesCount: amb.salesCount + 1,
             salesAmount: (amb.salesAmount ?? 0) + order.subtotal,
+            lastSaleAt: Date.now(),
           });
           // Ascenso automático de nivel si alcanza el umbral configurado
           await promoteIfEligible(ctx, order.ambassadorId);
@@ -150,6 +154,16 @@ export const markPayment = mutation({
       }
 
       await ctx.db.patch(order._id, { stockApplied: true });
+
+      // Crear/actualizar registro de cliente en CRM
+      await ctx.runMutation(internal.crm.upsertCustomerInternal, {
+        name: order.customerName,
+        email: order.customerEmail,
+        phone: order.customerPhone,
+        total: order.total,
+        orderNumber: order.orderNumber,
+        orderAt: Date.now(),
+      });
 
       // Correo de confirmación al cliente
       await ctx.scheduler.runAfter(0, internal.emails.sendOrderConfirmation, {
@@ -186,15 +200,3 @@ export const listRecent = query({
   },
 });
 
-// Actualiza el estado de una orden (admin).
-export const updateStatus = mutation({
-  args: {
-    adminKey: v.string(),
-    id: v.id("orders"),
-    status: v.union(v.literal("pending"), v.literal("paid"), v.literal("shipped"), v.literal("delivered"), v.literal("cancelled")),
-  },
-  handler: async (ctx, { adminKey, id, status }) => {
-    assertAdmin(adminKey);
-    await ctx.db.patch(id, { status });
-  },
-});

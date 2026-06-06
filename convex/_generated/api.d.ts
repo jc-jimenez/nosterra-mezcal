@@ -10,6 +10,7 @@
 
 import type * as ambassadors from "../ambassadors.js";
 import type * as coupons from "../coupons.js";
+import type * as crm from "../crm.js";
 import type * as emails from "../emails.js";
 import type * as orders from "../orders.js";
 import type * as products from "../products.js";
@@ -25,6 +26,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   ambassadors: typeof ambassadors;
   coupons: typeof coupons;
+  crm: typeof crm;
   emails: typeof emails;
   orders: typeof orders;
   products: typeof products;

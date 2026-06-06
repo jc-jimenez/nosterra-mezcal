@@ -183,6 +183,112 @@ export const sendOrderConfirmation = internalAction({
   },
 });
 
+// Correo de campaña/motivación a embajadores
+export const sendCampaignEmail = internalAction({
+  args: { to: v.string(), name: v.string(), subject: v.string(), body: v.string() },
+  handler: async (_ctx, { to, name, subject, body }) => {
+    const apiKey = process.env.RESEND_API_KEY;
+    const from = process.env.EMAIL_FROM || "NOSTERRA <onboarding@resend.dev>";
+    if (!apiKey) { console.warn("RESEND_API_KEY no configurada"); return { ok: false }; }
+
+    const first = name.split(" ")[0] || "embajador";
+    // Convierte saltos de línea en párrafos y soporta {nombre}
+    const personalized = body.replace(/\{nombre\}/gi, first);
+    const paragraphs = personalized
+      .split(/\n{2,}/)
+      .map((p) => `<p style="font-size:15px;line-height:1.7;color:#3a3a34;margin:0 0 14px">${p.replace(/\n/g, "<br/>")}</p>`)
+      .join("");
+
+    const html = layout(`¡Hola, ${first}!`, `
+      ${paragraphs}
+      <div style="text-align:center;margin:26px 0 6px">
+        <a href="https://www.nosterramezcal.com/embajadores" style="display:inline-block;background:${BRAND};color:${DARK};text-decoration:none;padding:13px 30px;border-radius:8px;font-size:14px;font-weight:600;letter-spacing:1px">Ir a mi panel de embajador</a>
+      </div>`);
+
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from, to: [to], subject, html }),
+    });
+    return res.ok ? { ok: true } : { ok: false };
+  },
+});
+
+export const sendOrderStatusEmail = internalAction({
+  args: {
+    to: v.string(),
+    customerName: v.string(),
+    orderNumber: v.string(),
+    type: v.union(v.literal("confirmado"), v.literal("enviado"), v.literal("cerrado")),
+    trackingNumber: v.optional(v.string()),
+    carrier: v.optional(v.string()),
+  },
+  handler: async (_ctx, { to, customerName, orderNumber, type, trackingNumber, carrier }) => {
+    const apiKey = process.env.RESEND_API_KEY;
+    const from = process.env.EMAIL_FROM || "NOSTERRA <onboarding@resend.dev>";
+    if (!apiKey) { console.warn("RESEND_API_KEY no configurada"); return { ok: false }; }
+
+    const first = customerName.split(" ")[0] || "cliente";
+
+    const templates = {
+      confirmado: {
+        subject: `Tu pedido ${orderNumber} está confirmado · NOSTERRA`,
+        html: layout("¡Tu pedido está confirmado!", `
+          <p style="font-size:15px;line-height:1.7;color:#3a3a34;margin:0 0 14px">
+            Hola <strong>${first}</strong>, confirmamos que recibimos tu pedido <strong>${orderNumber}</strong>
+            y ya estamos preparándolo con todo el cuidado que merece.
+          </p>
+          <p style="font-size:14px;color:#6a6458;margin:0 0 14px">
+            En cuanto lo enviemos te avisamos con el número de guía para que puedas rastrear tu paquete.
+          </p>
+          <div style="text-align:center;margin:24px 0">
+            <a href="https://www.nosterramezcal.com" style="display:inline-block;background:${BRAND};color:${DARK};text-decoration:none;padding:13px 30px;border-radius:8px;font-size:14px;font-weight:600">Ver tienda</a>
+          </div>`),
+      },
+      enviado: {
+        subject: `Tu pedido ${orderNumber} va en camino · NOSTERRA`,
+        html: layout("¡Tu pedido está en camino! 🚚", `
+          <p style="font-size:15px;line-height:1.7;color:#3a3a34;margin:0 0 14px">
+            Hola <strong>${first}</strong>, tu pedido <strong>${orderNumber}</strong> ya fue enviado.
+          </p>
+          <div style="background:#f9f7f4;border-radius:10px;padding:18px 20px;margin:16px 0">
+            <p style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#9a9486;margin:0 0 8px">Datos de rastreo</p>
+            <p style="font-size:15px;color:#3a3a34;margin:0"><strong>Paquetería:</strong> ${carrier || "Por confirmar"}</p>
+            <p style="font-size:15px;color:#3a3a34;margin:6px 0 0"><strong>Número de guía:</strong> <span style="font-family:monospace;font-size:16px">${trackingNumber}</span></p>
+          </div>
+          <p style="font-size:14px;color:#6a6458;margin:0">
+            El tiempo estimado de entrega es de <strong>3 a 5 días hábiles</strong>.
+            Puedes rastrear tu paquete en el sitio web de ${carrier || "la paquetería"}.
+          </p>`),
+      },
+      cerrado: {
+        subject: `Pedido ${orderNumber} completado · NOSTERRA`,
+        html: layout("¡Gracias por tu compra!", `
+          <p style="font-size:15px;line-height:1.7;color:#3a3a34;margin:0 0 14px">
+            Hola <strong>${first}</strong>, tu pedido <strong>${orderNumber}</strong> ha sido entregado y cerrado.
+            Esperamos que disfrutes tu NOSTERRA Mezcal al máximo. 🥃
+          </p>
+          <p style="font-size:15px;line-height:1.7;color:#3a3a34;margin:0 0 14px">
+            Si tienes cualquier comentario o algo no estuvo bien, escríbenos a
+            <a href="mailto:hola@nosterramezcal.com" style="color:${BRAND}">hola@nosterramezcal.com</a>.
+            Tu opinión nos ayuda a mejorar.
+          </p>
+          <div style="text-align:center;margin:24px 0">
+            <a href="https://www.nosterramezcal.com" style="display:inline-block;background:${BRAND};color:${DARK};text-decoration:none;padding:13px 30px;border-radius:8px;font-size:14px;font-weight:600">Volver a la tienda</a>
+          </div>`),
+      },
+    };
+
+    const tpl = templates[type];
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from, to: [to], subject: tpl.subject, html: tpl.html }),
+    });
+    return res.ok ? { ok: true } : { ok: false };
+  },
+});
+
 export const sendAmbassadorEmail = internalAction({
   args: {
     to: v.string(),

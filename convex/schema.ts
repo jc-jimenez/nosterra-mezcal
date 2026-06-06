@@ -107,6 +107,8 @@ export default defineSchema({
     paidCommission: v.number(), // comisión ya pagada/redimida (MXN)
     salesCount: v.number(),
     salesAmount: v.optional(v.number()), // monto total vendido con su código (MXN)
+    lastSaleAt: v.optional(v.number()), // timestamp de su última venta
+    crmNotes: v.optional(v.string()), // notas internas del admin sobre el embajador
     isActive: v.boolean(),
     status: v.union(
       v.literal("pending"), // postulación por revisar
@@ -147,7 +149,7 @@ export default defineSchema({
 
   // Órdenes de compra (pago con tarjeta vía Mercado Pago)
   orders: defineTable({
-    orderNumber: v.string(), // NOST-2026-0001
+    orderNumber: v.string(),
     customerName: v.string(),
     customerEmail: v.string(),
     customerPhone: v.optional(v.string()),
@@ -172,16 +174,20 @@ export default defineSchema({
     ),
     subtotal: v.number(),
     shipping: v.number(),
-    discount: v.optional(v.number()), // monto descontado por cupón
+    discount: v.optional(v.number()),
     couponCode: v.optional(v.string()),
     ambassadorId: v.optional(v.id("ambassadors")),
-    commission: v.optional(v.number()), // comisión generada para el embajador
+    commission: v.optional(v.number()),
     total: v.number(),
     status: v.union(
-      v.literal("pending"), // creada, esperando pago
-      v.literal("paid"), // pago aprobado
-      v.literal("shipped"),
-      v.literal("delivered"),
+      v.literal("pending"),    // esperando pago
+      v.literal("nuevo"),      // pago aprobado, entra al CRM
+      v.literal("confirmado"), // tú confirmas que tienes stock
+      v.literal("preparando"), // empacando
+      v.literal("enviado"),    // tiene guía de rastreo
+      v.literal("en_camino"),  // paquetería lo tiene
+      v.literal("entregado"),  // paquetería confirma entrega
+      v.literal("cerrado"),    // pedido completado, va al historial
       v.literal("cancelled")
     ),
     paymentStatus: v.union(
@@ -190,9 +196,52 @@ export default defineSchema({
       v.literal("rejected"),
       v.literal("in_process")
     ),
-    paymentId: v.optional(v.string()), // id de Mercado Pago
-    stockApplied: v.boolean(), // si ya se descontó el stock (idempotencia)
+    paymentId: v.optional(v.string()),
+    stockApplied: v.boolean(),
+    // CRM
+    trackingNumber: v.optional(v.string()),  // número de guía
+    carrier: v.optional(v.string()),          // DHL, FedEx, Estafeta…
+    adminNotes: v.optional(v.string()),       // notas internas
+    closedAt: v.optional(v.number()),         // timestamp de cierre
+    // Historial de cambios de estado
+    statusHistory: v.optional(v.array(v.object({
+      status: v.string(),
+      at: v.number(),
+      note: v.optional(v.string()),
+    }))),
   })
     .index("by_order_number", ["orderNumber"])
-    .index("by_email", ["customerEmail"]),
+    .index("by_email", ["customerEmail"])
+    .index("by_status", ["status"]),
+
+  // Campañas de motivación a embajadores (correos masivos)
+  campaigns: defineTable({
+    subject: v.string(),
+    body: v.string(), // texto plano / markdown simple
+    audience: v.union(
+      v.literal("all"),       // todos los activos
+      v.literal("oro"),
+      v.literal("plata"),
+      v.literal("normal"),
+      v.literal("inactivos")  // activos sin ventas o sin vender hace tiempo
+    ),
+    sentCount: v.number(),
+    createdAt: v.number(),
+  }),
+
+  // Clientes (se crean/actualizan automáticamente al pagar)
+  customers: defineTable({
+    name: v.string(),
+    email: v.string(),
+    phone: v.optional(v.string()),
+    totalSpent: v.number(),
+    orderCount: v.number(),
+    lastOrderAt: v.number(),
+    lastOrderNumber: v.optional(v.string()),
+    // Notas del admin
+    notes: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())), // ej. ["vip", "mayorista"]
+  })
+    .index("by_email", ["email"])
+    .index("by_total", ["totalSpent"]),
 });
