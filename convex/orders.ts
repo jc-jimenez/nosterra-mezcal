@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { promoteIfEligible } from "./ambassadors";
 
 // Secreto compartido servidor↔Convex para mutaciones sensibles (webhook).
 function assertServer(secret: string) {
@@ -140,7 +141,10 @@ export const markPayment = mutation({
           await ctx.db.patch(order.ambassadorId, {
             accruedCommission: amb.accruedCommission + order.commission,
             salesCount: amb.salesCount + 1,
+            salesAmount: (amb.salesAmount ?? 0) + order.subtotal,
           });
+          // Ascenso automático de nivel si alcanza el umbral configurado
+          await promoteIfEligible(ctx, order.ambassadorId);
         }
       }
 

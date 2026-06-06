@@ -8,6 +8,9 @@ export interface AmbassadorConfig {
   tierPlata: number;
   tierOro: number;
   customerDiscount: number;
+  thresholdMetric?: "sales" | "amount";
+  plataMin?: number;
+  oroMin?: number;
 }
 
 export interface StoreSettings {
@@ -19,7 +22,7 @@ export interface StoreSettings {
   ambassador: AmbassadorConfig;
 }
 
-const AMB_DEFAULT: AmbassadorConfig = { tierNormal: 2, tierPlata: 3, tierOro: 5, customerDiscount: 5 };
+const AMB_DEFAULT: AmbassadorConfig = { tierNormal: 2, tierPlata: 3, tierOro: 5, customerDiscount: 5, thresholdMetric: "sales", plataMin: 10, oroMin: 25 };
 
 const DEFAULTS: StoreSettings = {
   whatsappNumber: "527775238569",

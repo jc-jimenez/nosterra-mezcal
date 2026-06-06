@@ -251,6 +251,9 @@ function AdminDashboard({ adminKey, onLogout }: { adminKey: string; onLogout: ()
 
         {/* Embajadores */}
         <AmbassadorsCard adminKey={adminKey} />
+
+        {/* Pagos en efectivo (transferencias) */}
+        <PayoutsCard adminKey={adminKey} />
       </main>
 
       {/* Editor (modal) */}
@@ -331,8 +334,8 @@ function SettingsCard({
   settings,
   onSave,
 }: {
-  settings: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost?: number; currency: string; ambassador?: { tierNormal: number; tierPlata: number; tierOro: number; customerDiscount: number } } | undefined;
-  onSave: (d: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost: number; currency: string; ambassador: { tierNormal: number; tierPlata: number; tierOro: number; customerDiscount: number } }) => Promise<void>;
+  settings: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost?: number; currency: string; ambassador?: { tierNormal: number; tierPlata: number; tierOro: number; customerDiscount: number; thresholdMetric?: "sales" | "amount"; plataMin?: number; oroMin?: number } } | undefined;
+  onSave: (d: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost: number; currency: string; ambassador: { tierNormal: number; tierPlata: number; tierOro: number; customerDiscount: number; thresholdMetric: "sales" | "amount"; plataMin: number; oroMin: number } }) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [wa, setWa] = useState("");
@@ -343,6 +346,9 @@ function SettingsCard({
   const [tPlata, setTPlata] = useState("3");
   const [tOro, setTOro] = useState("5");
   const [custDisc, setCustDisc] = useState("5");
+  const [metric, setMetric] = useState<"sales" | "amount">("sales");
+  const [plataMin, setPlataMin] = useState("10");
+  const [oroMin, setOroMin] = useState("25");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -357,6 +363,9 @@ function SettingsCard({
       setTPlata(String(amb?.tierPlata ?? 3));
       setTOro(String(amb?.tierOro ?? 5));
       setCustDisc(String(amb?.customerDiscount ?? 5));
+      setMetric(amb?.thresholdMetric ?? "sales");
+      setPlataMin(String(amb?.plataMin ?? 10));
+      setOroMin(String(amb?.oroMin ?? 25));
     }
   }, [settings]);
 
@@ -369,6 +378,7 @@ function SettingsCard({
         ambassador: {
           tierNormal: Number(tNormal) || 0, tierPlata: Number(tPlata) || 0,
           tierOro: Number(tOro) || 0, customerDiscount: Number(custDisc) || 0,
+          thresholdMetric: metric, plataMin: Number(plataMin) || 0, oroMin: Number(oroMin) || 0,
         },
       });
       setSaved(true); setTimeout(() => setSaved(false), 2000);
@@ -399,6 +409,21 @@ function SettingsCard({
               <Field label="Descuento al cliente (%)"><input type="number" className={input} value={custDisc} onChange={(e) => setCustDisc(e.target.value)} /></Field>
             </div>
             <p className="mt-2 text-xs text-neutral-400">El cambio aplica a nuevos embajadores y al reasignar nivel. El descuento al cliente aplica a embajadores nuevos.</p>
+          </div>
+
+          <div className="border-t border-neutral-100 pt-4">
+            <p className="mb-3 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-amber-600"><Crown className="h-3.5 w-3.5" /> Ascenso automático de nivel</p>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Medir por">
+                <select className={input} value={metric} onChange={(e) => setMetric(e.target.value as "sales" | "amount")}>
+                  <option value="sales">Número de ventas</option>
+                  <option value="amount">Monto vendido (MXN)</option>
+                </select>
+              </Field>
+              <Field label={metric === "amount" ? "Plata desde ($)" : "Plata desde (ventas)"}><input type="number" className={input} value={plataMin} onChange={(e) => setPlataMin(e.target.value)} /></Field>
+              <Field label={metric === "amount" ? "Oro desde ($)" : "Oro desde (ventas)"}><input type="number" className={input} value={oroMin} onChange={(e) => setOroMin(e.target.value)} /></Field>
+            </div>
+            <p className="mt-2 text-xs text-neutral-400">Al alcanzar el umbral, el embajador sube de nivel automáticamente. Canje: Normal solo producto · Plata hasta 50% efectivo · Oro libre.</p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -708,6 +733,83 @@ function AmbassadorsCard({ adminKey }: { adminKey: string }) {
                     <button onClick={() => { if (confirm(`¿Eliminar al embajador ${a.name}?`)) remove({ adminKey, id: a._id }); }} className="inline-flex items-center text-xs text-red-500 hover:text-red-700">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PayoutsCard({ adminKey }: { adminKey: string }) {
+  const payouts = useQuery(api.ambassadors.listPayouts, { adminKey });
+  const markPaid = useMutation(api.ambassadors.markPayoutPaid);
+  const reject = useMutation(api.ambassadors.rejectPayout);
+
+  const pending = (payouts ?? []).filter((p) => p.status === "pending");
+
+  return (
+    <section className="rounded-2xl border border-neutral-200 bg-white">
+      <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-4">
+        <h2 className="flex items-center gap-2 font-semibold text-neutral-900"><DollarSign className="h-4 w-4 text-amber-600" /> Pagos en efectivo (transferencias)</h2>
+        {pending.length > 0 && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">{pending.length} por transferir</span>}
+      </div>
+
+      {payouts === undefined ? (
+        <div className="p-6 space-y-2">{[1, 2].map((i) => <div key={i} className="h-14 animate-pulse rounded-lg bg-neutral-100" />)}</div>
+      ) : payouts.length === 0 ? (
+        <p className="py-10 text-center text-sm text-neutral-500">No hay solicitudes de pago en efectivo.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-neutral-400 border-b border-neutral-100">
+                <th className="px-6 py-3 font-medium">Embajador</th>
+                <th className="px-4 py-3 font-medium">Datos bancarios</th>
+                <th className="px-4 py-3 font-medium">Efectivo</th>
+                <th className="px-4 py-3 font-medium">Estado</th>
+                <th className="px-4 py-3 font-medium text-right">Acción</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-50">
+              {payouts.map((p) => (
+                <tr key={p._id} className="hover:bg-neutral-50 align-top">
+                  <td className="px-6 py-3">
+                    <p className="font-medium text-neutral-900">{p.ambassadorName}</p>
+                    <p className="text-xs text-neutral-500"><span className="font-mono">{p.ambassadorCode}</span> · {new Date(p.createdAt).toLocaleDateString("es-MX")}</p>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-neutral-600">
+                    {p.bank ? (
+                      <>
+                        <p>{p.bank.titular ?? "—"}</p>
+                        <p className="font-mono">CLABE: {p.bank.clabe ?? "—"}</p>
+                        <p>{p.bank.banco ?? ""}{p.bank.rfc ? ` · RFC: ${p.bank.rfc}` : ""}</p>
+                      </>
+                    ) : "—"}
+                  </td>
+                  <td className="px-4 py-3 font-medium text-neutral-900">
+                    ${p.cashAmount.toLocaleString("es-MX")}
+                    {p.couponAmount > 0 && <p className="text-xs font-normal text-neutral-400">+ ${p.couponAmount.toLocaleString("es-MX")} en cupón {p.couponCode ?? ""}</p>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${p.status === "paid" ? "bg-emerald-100 text-emerald-700" : p.status === "rejected" ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-700"}`}>
+                      {p.status === "paid" ? "Transferido" : p.status === "rejected" ? "Rechazado" : "Pendiente"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    {p.status === "pending" && (
+                      <>
+                        <button onClick={() => { if (confirm(`¿Marcar como transferido el pago de $${p.cashAmount.toLocaleString("es-MX")} a ${p.ambassadorName}?`)) markPaid({ adminKey, id: p._id }); }} className="mr-2 inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700">
+                          ✓ Transferido
+                        </button>
+                        <button onClick={() => { if (confirm(`¿Rechazar el pago? El monto regresa al saldo del embajador.`)) reject({ adminKey, id: p._id }); }} className="inline-flex items-center text-xs text-red-500 hover:text-red-700">
+                          Rechazar
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}

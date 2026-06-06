@@ -43,6 +43,10 @@ export default defineSchema({
         tierPlata: v.number(),
         tierOro: v.number(),
         customerDiscount: v.number(), // % de descuento al cliente que usa un código de embajador
+        // Ascenso automático de nivel (configurable por el admin)
+        thresholdMetric: v.optional(v.union(v.literal("sales"), v.literal("amount"))), // por nº de ventas o monto vendido
+        plataMin: v.optional(v.number()), // umbral para subir a Plata
+        oroMin: v.optional(v.number()), // umbral para subir a Oro
       })
     ),
   }),
@@ -69,16 +73,40 @@ export default defineSchema({
 
   // Embajadores de marca (Fase 2)
   ambassadors: defineTable({
-    name: v.string(),
+    name: v.string(), // nombre completo (Nombre + Apellidos), se compone al registrarse
     email: v.string(),
     code: v.string(), // su código personal (también existe como cupón)
     pin: v.optional(v.string()), // PIN para acceder a su panel y redimir
+    // Datos personales (obligatorios al registrarse: nombre, apellidos, correo, whatsapp)
+    apellidoPaterno: v.optional(v.string()),
+    apellidoMaterno: v.optional(v.string()),
+    whatsapp: v.optional(v.string()),
+    // Datos opcionales (se piden después; obligatorios para cobrar en efectivo)
+    phone: v.optional(v.string()),
+    rfc: v.optional(v.string()),
+    curp: v.optional(v.string()),
+    address: v.optional(
+      v.object({
+        calle: v.optional(v.string()),
+        numero: v.optional(v.string()),
+        colonia: v.optional(v.string()),
+        cp: v.optional(v.string()),
+        ciudad: v.optional(v.string()),
+        estado: v.optional(v.string()),
+        pais: v.optional(v.string()),
+      })
+    ),
+    // Datos bancarios para transferencia (Plata/Oro)
+    clabe: v.optional(v.string()),
+    banco: v.optional(v.string()),
+    titularCuenta: v.optional(v.string()),
     tier: v.union(v.literal("normal"), v.literal("plata"), v.literal("oro")),
     commissionPct: v.number(), // % de comisión (según nivel, ajustable)
     customerDiscountPct: v.number(), // % de descuento que da a sus clientes
     accruedCommission: v.number(), // comisión acumulada (MXN)
-    paidCommission: v.number(), // comisión ya pagada (MXN)
+    paidCommission: v.number(), // comisión ya pagada/redimida (MXN)
     salesCount: v.number(),
+    salesAmount: v.optional(v.number()), // monto total vendido con su código (MXN)
     isActive: v.boolean(),
     status: v.union(
       v.literal("pending"), // postulación por revisar
@@ -88,6 +116,34 @@ export default defineSchema({
   })
     .index("by_code", ["code"])
     .index("by_email", ["email"]),
+
+  // Solicitudes de pago en efectivo (transferencia) generadas al redimir comisión
+  payouts: defineTable({
+    ambassadorId: v.id("ambassadors"),
+    ambassadorName: v.string(),
+    ambassadorCode: v.string(),
+    cashAmount: v.number(), // monto a pagar por transferencia (MXN)
+    couponAmount: v.number(), // monto entregado como cupón en la misma redención
+    couponCode: v.optional(v.string()), // cupón generado por la parte de producto
+    bank: v.optional(
+      v.object({
+        clabe: v.optional(v.string()),
+        banco: v.optional(v.string()),
+        titular: v.optional(v.string()),
+        rfc: v.optional(v.string()),
+      })
+    ),
+    status: v.union(
+      v.literal("pending"), // por transferir
+      v.literal("paid"), // transferencia realizada
+      v.literal("rejected")
+    ),
+    createdAt: v.number(),
+    paidAt: v.optional(v.number()),
+    note: v.optional(v.string()),
+  })
+    .index("by_ambassador", ["ambassadorId"])
+    .index("by_status", ["status"]),
 
   // Órdenes de compra (pago con tarjeta vía Mercado Pago)
   orders: defineTable({
