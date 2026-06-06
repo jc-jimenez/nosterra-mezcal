@@ -40,7 +40,7 @@ const EMPTY_DRAFT: Draft = {
   bottlesTotal: "", bottlesAvailable: "", sortOrder: "0", imageUrl: "", image: "",
 };
 
-const input = "w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-600";
+const input = "w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm bg-white text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-600";
 
 export default function AdminPage() {
   const [adminKey, setAdminKey] = useState<string | null>(null);
