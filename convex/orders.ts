@@ -181,7 +181,20 @@ export const listRecent = query({
   args: { adminKey: v.string() },
   handler: async (ctx, { adminKey }) => {
     assertAdmin(adminKey);
-    const orders = await ctx.db.query("orders").order("desc").take(100);
+    const orders = await ctx.db.query("orders").order("desc").take(200);
     return orders;
+  },
+});
+
+// Actualiza el estado de una orden (admin).
+export const updateStatus = mutation({
+  args: {
+    adminKey: v.string(),
+    id: v.id("orders"),
+    status: v.union(v.literal("pending"), v.literal("paid"), v.literal("shipped"), v.literal("delivered"), v.literal("cancelled")),
+  },
+  handler: async (ctx, { adminKey, id, status }) => {
+    assertAdmin(adminKey);
+    await ctx.db.patch(id, { status });
   },
 });

@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { Lock, Plus, Pencil, Trash2, Save, X, Upload, LogOut, Settings as Cog, Ticket, Power, Crown, Copy, DollarSign } from "lucide-react";
+import { Lock, Plus, Pencil, Trash2, Save, X, Upload, LogOut, Settings as Cog, Ticket, Power, Crown, Copy, DollarSign, ShoppingBag, ChevronDown, ChevronUp } from "lucide-react";
 
 const KEY_STORAGE = "nosterra_admin_key";
 
@@ -245,6 +245,9 @@ function AdminDashboard({ adminKey, onLogout }: { adminKey: string; onLogout: ()
             </ul>
           )}
         </section>
+
+        {/* Órdenes */}
+        <OrdersCard adminKey={adminKey} />
 
         {/* Cupones */}
         <CouponsCard adminKey={adminKey} />
@@ -738,6 +741,177 @@ function AmbassadorsCard({ adminKey }: { adminKey: string }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  pending: "Pendiente", paid: "Pagado", shipped: "Enviado", delivered: "Entregado", cancelled: "Cancelado",
+};
+const STATUS_COLOR: Record<string, string> = {
+  pending: "bg-amber-100 text-amber-700",
+  paid: "bg-blue-100 text-blue-700",
+  shipped: "bg-purple-100 text-purple-700",
+  delivered: "bg-emerald-100 text-emerald-700",
+  cancelled: "bg-red-100 text-red-600",
+};
+const PAYMENT_COLOR: Record<string, string> = {
+  approved: "text-emerald-600", pending: "text-amber-600",
+  rejected: "text-red-500", in_process: "text-blue-600",
+};
+
+function OrdersCard({ adminKey }: { adminKey: string }) {
+  const orders = useQuery(api.orders.listRecent, { adminKey });
+  const updateStatus = useMutation(api.orders.updateStatus);
+  const [filter, setFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const filtered = (orders ?? []).filter((o) => {
+    if (filter !== "all" && o.status !== filter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return o.orderNumber.toLowerCase().includes(q) ||
+        o.customerName.toLowerCase().includes(q) ||
+        o.customerEmail.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const totalRevenue = (orders ?? [])
+    .filter((o) => o.paymentStatus === "approved")
+    .reduce((s, o) => s + o.total, 0);
+
+  const pendingCount = (orders ?? []).filter((o) => o.status === "paid").length;
+
+  return (
+    <section className="rounded-2xl border border-neutral-200 bg-white">
+      <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-4">
+        <h2 className="flex items-center gap-2 font-semibold text-neutral-900">
+          <ShoppingBag className="h-4 w-4 text-amber-600" /> Órdenes
+        </h2>
+        <div className="flex items-center gap-3">
+          {pendingCount > 0 && (
+            <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">{pendingCount} por enviar</span>
+          )}
+          <span className="text-sm text-neutral-500">Total cobrado: <span className="font-semibold text-neutral-900">${totalRevenue.toLocaleString("es-MX")}</span></span>
+        </div>
+      </div>
+
+      {/* Filtros */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-neutral-100 px-6 py-3">
+        <input
+          placeholder="Buscar por orden, nombre o correo…"
+          className="flex-1 min-w-48 rounded-lg border border-neutral-200 px-3 py-1.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-600"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="flex gap-1">
+          {["all", "paid", "shipped", "delivered", "pending", "cancelled"].map((s) => (
+            <button key={s} onClick={() => setFilter(s)} className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${filter === s ? "bg-amber-600 text-white" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"}`}>
+              {s === "all" ? "Todas" : STATUS_LABEL[s]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {orders === undefined ? (
+        <div className="p-6 space-y-2">{[1, 2, 3].map((i) => <div key={i} className="h-14 animate-pulse rounded-lg bg-neutral-100" />)}</div>
+      ) : filtered.length === 0 ? (
+        <p className="py-10 text-center text-sm text-neutral-500">No hay órdenes con ese filtro.</p>
+      ) : (
+        <div className="divide-y divide-neutral-50">
+          {filtered.map((o) => (
+            <div key={o._id}>
+              {/* Fila resumen */}
+              <div
+                className="flex items-center gap-3 px-6 py-3 hover:bg-neutral-50 cursor-pointer"
+                onClick={() => setExpanded(expanded === o._id ? null : o._id)}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm font-medium text-neutral-900">{o.orderNumber}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_COLOR[o.status]}`}>{STATUS_LABEL[o.status]}</span>
+                    <span className={`text-[11px] font-medium ${PAYMENT_COLOR[o.paymentStatus]}`}>
+                      {o.paymentStatus === "approved" ? "✓ Pagado" : o.paymentStatus === "rejected" ? "✗ Rechazado" : o.paymentStatus === "in_process" ? "En proceso" : "Pendiente"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-500 mt-0.5">{o.customerName} · {o.customerEmail}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-neutral-900">${o.total.toLocaleString("es-MX")}</p>
+                  <p className="text-[11px] text-neutral-400">{new Date(o._creationTime).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })}</p>
+                </div>
+                {expanded === o._id ? <ChevronUp className="h-4 w-4 text-neutral-400 flex-shrink-0" /> : <ChevronDown className="h-4 w-4 text-neutral-400 flex-shrink-0" />}
+              </div>
+
+              {/* Detalle expandible */}
+              {expanded === o._id && (
+                <div className="bg-neutral-50 px-6 py-4 space-y-4 border-t border-neutral-100">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {/* Productos */}
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-neutral-400 mb-2">Productos</p>
+                      <ul className="space-y-1">
+                        {o.items.map((item, i) => (
+                          <li key={i} className="flex justify-between text-sm text-neutral-700">
+                            <span>{item.name} <span className="text-neutral-400">×{item.qty}</span></span>
+                            <span>${(item.price * item.qty).toLocaleString("es-MX")}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="mt-2 space-y-0.5 border-t border-neutral-200 pt-2 text-sm">
+                        <div className="flex justify-between text-neutral-500"><span>Subtotal</span><span>${o.subtotal.toLocaleString("es-MX")}</span></div>
+                        <div className="flex justify-between text-neutral-500"><span>Envío</span><span>${o.shipping.toLocaleString("es-MX")}</span></div>
+                        {(o.discount ?? 0) > 0 && <div className="flex justify-between text-emerald-600"><span>Descuento {o.couponCode && `(${o.couponCode})`}</span><span>-${(o.discount ?? 0).toLocaleString("es-MX")}</span></div>}
+                        <div className="flex justify-between font-semibold text-neutral-900"><span>Total</span><span>${o.total.toLocaleString("es-MX")}</span></div>
+                      </div>
+                    </div>
+
+                    {/* Dirección + datos */}
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide text-neutral-400 mb-1">Dirección de envío</p>
+                        <p className="text-sm text-neutral-700 leading-relaxed">
+                          {o.shippingAddress.calle} {o.shippingAddress.numero}, {o.shippingAddress.colonia}<br />
+                          C.P. {o.shippingAddress.cp}, {o.shippingAddress.ciudad}, {o.shippingAddress.estado}
+                          {o.shippingAddress.referencias && <><br /><span className="text-neutral-400">Ref: {o.shippingAddress.referencias}</span></>}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide text-neutral-400 mb-1">Contacto</p>
+                        <p className="text-sm text-neutral-700">{o.customerEmail}</p>
+                        {o.customerPhone && <p className="text-sm text-neutral-700">{o.customerPhone}</p>}
+                      </div>
+                      {o.paymentId && (
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-neutral-400 mb-1">ID de pago (MP)</p>
+                          <p className="font-mono text-xs text-neutral-600">{o.paymentId}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Cambiar estado */}
+                  <div className="flex flex-wrap items-center gap-2 border-t border-neutral-200 pt-3">
+                    <span className="text-xs text-neutral-500">Cambiar estado:</span>
+                    {(["paid", "shipped", "delivered", "cancelled"] as const).map((s) => (
+                      <button
+                        key={s}
+                        disabled={o.status === s}
+                        onClick={() => updateStatus({ adminKey, id: o._id, status: s })}
+                        className={`rounded-full px-3 py-1 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-default ${STATUS_COLOR[s]} hover:opacity-80`}
+                      >
+                        {STATUS_LABEL[s]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </section>
