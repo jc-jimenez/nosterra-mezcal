@@ -8,6 +8,7 @@ import { ChevronLeft, ShoppingBag, ShieldCheck, Truck, CreditCard, Minus, Plus, 
 import { useCart } from "@/hooks/useCart";
 import { useStoreSettings } from "@/hooks/useStoreSettings";
 import { formatMXN } from "@/lib/store-config";
+import { estadoFromCP } from "@/lib/cp-estados";
 
 const inputClass =
   "w-full border border-gold/20 bg-obsidian/60 px-4 py-3 font-body text-sm text-ivory placeholder:text-muted/60 focus:border-gold focus:outline-none transition-colors";
@@ -221,13 +222,29 @@ export default function CheckoutPage() {
             </div>
             <input required placeholder="Colonia" className={inputClass} value={form.colonia} onChange={(e) => set("colonia", e.target.value)} />
             <div className="grid gap-4 sm:grid-cols-3">
-              <input required placeholder="C.P." className={inputClass} value={form.cp} onChange={(e) => set("cp", e.target.value)} />
+              <input
+                required
+                placeholder="C.P."
+                inputMode="numeric"
+                maxLength={5}
+                className={inputClass}
+                value={form.cp}
+                onChange={(e) => {
+                  const cp = e.target.value.replace(/\D/g, "").slice(0, 5);
+                  const est = estadoFromCP(cp);
+                  // Auto-selecciona el estado según el C.P.
+                  setForm((f) => ({ ...f, cp, ...(est ? { estado: est } : {}) }));
+                }}
+              />
               <input required placeholder="Ciudad" className={inputClass} value={form.ciudad} onChange={(e) => set("ciudad", e.target.value)} />
               <select required disabled={outsideMexico} className={inputClass} value={form.estado} onChange={(e) => set("estado", e.target.value)}>
                 <option value="" disabled>Estado</option>
                 {ESTADOS_MX.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
+            <p className="-mt-1 font-body text-[11px] text-muted/60">
+              El estado se completa automáticamente con tu código postal. Si no coincide, puedes ajustarlo.
+            </p>
             <textarea rows={2} placeholder="Referencias de entrega (opcional)" className={`${inputClass} resize-none`} value={form.referencias} onChange={(e) => set("referencias", e.target.value)} />
 
             {payError && (
