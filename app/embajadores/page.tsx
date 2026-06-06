@@ -7,7 +7,7 @@ import { useStoreSettings } from "@/hooks/useStoreSettings";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { CartDrawer } from "@/components/store/CartDrawer";
-import { Sparkles, Gift, TrendingUp, Check, Copy, Crown } from "lucide-react";
+import { Sparkles, Gift, TrendingUp, Check, Copy, Crown, ChevronDown, MessageCircle } from "lucide-react";
 
 const inputClass =
   "w-full border border-gold/30 bg-obsidian/60 px-4 py-3 font-body text-sm text-ivory placeholder:text-ivory/55 focus:border-gold focus:outline-none transition-colors";
@@ -41,11 +41,26 @@ function ApplySection() {
 
 function Intro() {
   const settings = useStoreSettings();
+  const amb = settings.ambassador;
+  const tN = amb?.tierNormal ?? 2, tP = amb?.tierPlata ?? 3, tO = amb?.tierOro ?? 5;
+  const cd = amb?.customerDiscount ?? 5;
+  const plataMin = amb?.plataMin ?? 10, oroMin = amb?.oroMin ?? 25;
+  const byAmount = amb?.thresholdMetric === "amount";
+  const fmt = (n: number) => (byAmount ? `$${n.toLocaleString("es-MX")} en ventas` : `${n} ventas`);
+
+  const defComision = `Ganas un porcentaje de comisión sobre cada compra hecha con tu código: Normal ${tN}%, Plata ${tP}% y Oro ${tO}%. Se calcula sobre el subtotal (sin envío) y se acredita en cuanto el pago se confirma. La puedes redimir en efectivo (niveles Plata y Oro) o en cupón. No tiene costo ni cuotas: solo compartes tu código.`;
+  const defDescuento = `Quien compre usando tu código recibe ${cd}% de descuento. Es un incentivo extra para que te compren a ti y para que tus recomendados se animen a probar NOSTERRA.`;
+  const defNiveles = `Empiezas en Normal (${tN}%). Al acumular ${fmt(plataMin)} subes a Plata (${tP}%) y con ${fmt(oroMin)} llegas a Oro (${tO}%). El ascenso es automático: a mayor nivel, mayor comisión y más libertad para cobrar en efectivo.`;
+
   const benefits = [
-    { icon: TrendingUp, title: "Gana comisión", desc: "Recibe una comisión por cada venta hecha con tu código." },
-    { icon: Gift, title: "Premia a tus amigos", desc: `Quien use tu código recibe ${settings.ambassador?.customerDiscount ?? 5}% de descuento.` },
-    { icon: Crown, title: "Sube de nivel", desc: "Normal, Plata y Oro: a mayor nivel, mayor comisión." },
+    { icon: TrendingUp, title: "Gana comisión", short: `Comisión por cada venta con tu código (hasta ${tO}%).`, info: amb?.infoComision?.trim() || defComision },
+    { icon: Gift, title: "Premia a tus amigos", short: `Quien use tu código recibe ${cd}% de descuento.`, info: amb?.infoDescuento?.trim() || defDescuento },
+    { icon: Crown, title: "Sube de nivel", short: "Normal, Plata y Oro: a mayor nivel, mayor comisión.", info: amb?.infoNiveles?.trim() || defNiveles },
   ];
+
+  const [open, setOpen] = useState<number | null>(null);
+  const [showDudas, setShowDudas] = useState(false);
+
   return (
     <div>
       <p className="font-body text-xs uppercase tracking-[0.3em] text-gold">Programa de embajadores</p>
@@ -56,18 +71,76 @@ function Intro() {
         ¿Amas nuestro mezcal? Conviértete en embajador de marca: recibe tu código personal,
         tus referidos obtienen descuento y tú ganas comisión que te pagamos con cupones.
       </p>
-      <div className="mt-8 space-y-4">
-        {benefits.map((b) => (
-          <div key={b.title} className="flex gap-4 rounded-2xl border border-gold/15 bg-smoke p-5">
-            <b.icon className="h-6 w-6 flex-shrink-0 text-gold" />
-            <div>
-              <h3 className="font-display text-lg text-ivory">{b.title}</h3>
-              <p className="mt-0.5 font-body text-sm text-muted">{b.desc}</p>
-            </div>
+      <div className="mt-8 space-y-3">
+        {benefits.map((b, i) => (
+          <div key={b.title} className="overflow-hidden rounded-2xl border border-gold/15 bg-smoke">
+            <button onClick={() => setOpen(open === i ? null : i)} className="flex w-full items-start gap-4 p-5 text-left transition-colors hover:bg-gold/5">
+              <b.icon className="h-6 w-6 flex-shrink-0 text-gold" />
+              <div className="flex-1">
+                <h3 className="font-display text-lg text-ivory">{b.title}</h3>
+                <p className="mt-0.5 font-body text-sm text-muted">{b.short}</p>
+              </div>
+              <ChevronDown className={`h-4 w-4 flex-shrink-0 text-gold transition-transform ${open === i ? "rotate-180" : ""}`} />
+            </button>
+            {open === i && (
+              <div className="border-t border-gold/10 px-5 py-4">
+                <p className="font-body text-sm leading-relaxed text-muted whitespace-pre-line">{b.info}</p>
+              </div>
+            )}
           </div>
         ))}
       </div>
+
+      {/* ¿Tienes dudas? */}
+      <div className="mt-5">
+        <button onClick={() => setShowDudas((v) => !v)} className="flex items-center gap-2 font-body text-sm text-gold hover:text-gold-light">
+          <MessageCircle className="h-4 w-4" /> ¿Tienes dudas? Escríbenos
+        </button>
+        {showDudas && <DudasForm onClose={() => setShowDudas(false)} />}
+      </div>
     </div>
+  );
+}
+
+function DudasForm({ onClose }: { onClose: () => void }) {
+  const createInquiry = useMutation(api.crm.createInquiry);
+  const [name, setName] = useState("");
+  const [contact, setContact] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || !contact.trim() || !message.trim()) return;
+    setSending(true);
+    try {
+      await createInquiry({ name, contact, message });
+      setSent(true);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (sent) {
+    return (
+      <div className="mt-3 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-5 text-center">
+        <p className="font-body text-sm text-emerald-200">¡Gracias! Recibimos tu mensaje y te contactaremos pronto.</p>
+        <button onClick={onClose} className="mt-2 font-body text-[11px] text-muted/70 underline">Cerrar</button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-3 space-y-3 rounded-2xl border border-gold/15 bg-smoke p-5">
+      <p className="font-body text-xs text-muted">Cuéntanos tu duda y te respondemos por correo o WhatsApp.</p>
+      <input required placeholder="Tu nombre" className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
+      <input required placeholder="Correo o WhatsApp" className={inputClass} value={contact} onChange={(e) => setContact(e.target.value)} />
+      <textarea required rows={3} placeholder="¿Qué te gustaría saber?" className={`${inputClass} resize-none`} value={message} onChange={(e) => setMessage(e.target.value)} />
+      <button type="submit" disabled={sending} className="w-full bg-gold px-6 py-3 font-body text-sm uppercase tracking-[0.15em] text-obsidian transition-colors hover:bg-gold-light disabled:opacity-50">
+        {sending ? "Enviando…" : "Enviar mensaje"}
+      </button>
+    </form>
   );
 }
 

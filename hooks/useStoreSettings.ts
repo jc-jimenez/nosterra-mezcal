@@ -11,6 +11,9 @@ export interface AmbassadorConfig {
   thresholdMetric?: "sales" | "amount";
   plataMin?: number;
   oroMin?: number;
+  infoComision?: string;
+  infoDescuento?: string;
+  infoNiveles?: string;
 }
 
 export interface StoreSettings {

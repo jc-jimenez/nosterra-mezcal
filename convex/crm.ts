@@ -306,6 +306,47 @@ export const updateCustomerNotes = mutation({
   },
 });
 
+// ─── Dudas de aspirantes a embajador ─────────────────────────────────────────
+
+// Pública: cualquiera puede enviar una duda desde la página de embajadores
+export const createInquiry = mutation({
+  args: { name: v.string(), contact: v.string(), message: v.string() },
+  handler: async (ctx, { name, contact, message }) => {
+    await ctx.db.insert("inquiries", {
+      name: name.trim(),
+      contact: contact.trim(),
+      message: message.trim(),
+      status: "new",
+      createdAt: Date.now(),
+    });
+    // Aviso por correo al responsable de embajadores
+    const settings = await ctx.db.query("settings").first();
+    const ownerEmail = settings?.notifyAmbassadorsEmail || settings?.notifyOrdersEmail || process.env.OWNER_EMAIL || "";
+    if (ownerEmail) {
+      await ctx.scheduler.runAfter(0, internal.emails.sendInquiryNotification, {
+        to: ownerEmail, name: name.trim(), contact: contact.trim(), message: message.trim(),
+      });
+    }
+    return { ok: true };
+  },
+});
+
+export const listInquiries = query({
+  args: { adminKey: v.string() },
+  handler: async (ctx, { adminKey }) => {
+    assertAdmin(adminKey);
+    return await ctx.db.query("inquiries").order("desc").take(100);
+  },
+});
+
+export const resolveInquiry = mutation({
+  args: { adminKey: v.string(), id: v.id("inquiries") },
+  handler: async (ctx, { adminKey, id }) => {
+    assertAdmin(adminKey);
+    await ctx.db.patch(id, { status: "resolved" });
+  },
+});
+
 // ─── CRM de embajadores ──────────────────────────────────────────────────────
 
 // Lista de embajadores con métricas para seguimiento (solo activos por defecto)

@@ -339,8 +339,8 @@ function SettingsCard({
   settings,
   onSave,
 }: {
-  settings: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost?: number; currency: string; notifyOrdersEmail?: string; notifyAmbassadorsEmail?: string; ambassador?: { tierNormal: number; tierPlata: number; tierOro: number; customerDiscount: number; thresholdMetric?: "sales" | "amount"; plataMin?: number; oroMin?: number } } | undefined;
-  onSave: (d: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost: number; currency: string; notifyOrdersEmail: string; notifyAmbassadorsEmail: string; ambassador: { tierNormal: number; tierPlata: number; tierOro: number; customerDiscount: number; thresholdMetric: "sales" | "amount"; plataMin: number; oroMin: number } }) => Promise<void>;
+  settings: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost?: number; currency: string; notifyOrdersEmail?: string; notifyAmbassadorsEmail?: string; ambassador?: { tierNormal: number; tierPlata: number; tierOro: number; customerDiscount: number; thresholdMetric?: "sales" | "amount"; plataMin?: number; oroMin?: number; infoComision?: string; infoDescuento?: string; infoNiveles?: string } } | undefined;
+  onSave: (d: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost: number; currency: string; notifyOrdersEmail: string; notifyAmbassadorsEmail: string; ambassador: { tierNormal: number; tierPlata: number; tierOro: number; customerDiscount: number; thresholdMetric: "sales" | "amount"; plataMin: number; oroMin: number; infoComision: string; infoDescuento: string; infoNiveles: string } }) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [wa, setWa] = useState("");
@@ -356,6 +356,9 @@ function SettingsCard({
   const [metric, setMetric] = useState<"sales" | "amount">("sales");
   const [plataMin, setPlataMin] = useState("10");
   const [oroMin, setOroMin] = useState("25");
+  const [infoComision, setInfoComision] = useState("");
+  const [infoDescuento, setInfoDescuento] = useState("");
+  const [infoNiveles, setInfoNiveles] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -375,6 +378,9 @@ function SettingsCard({
       setMetric(amb?.thresholdMetric ?? "sales");
       setPlataMin(String(amb?.plataMin ?? 10));
       setOroMin(String(amb?.oroMin ?? 25));
+      setInfoComision(amb?.infoComision ?? "");
+      setInfoDescuento(amb?.infoDescuento ?? "");
+      setInfoNiveles(amb?.infoNiveles ?? "");
     }
   }, [settings]);
 
@@ -389,6 +395,7 @@ function SettingsCard({
           tierNormal: Number(tNormal) || 0, tierPlata: Number(tPlata) || 0,
           tierOro: Number(tOro) || 0, customerDiscount: Number(custDisc) || 0,
           thresholdMetric: metric, plataMin: Number(plataMin) || 0, oroMin: Number(oroMin) || 0,
+          infoComision: infoComision.trim(), infoDescuento: infoDescuento.trim(), infoNiveles: infoNiveles.trim(),
         },
       });
       setSaved(true); setTimeout(() => setSaved(false), 2000);
@@ -443,6 +450,16 @@ function SettingsCard({
               <Field label={metric === "amount" ? "Oro desde ($)" : "Oro desde (ventas)"}><input type="number" className={input} value={oroMin} onChange={(e) => setOroMin(e.target.value)} /></Field>
             </div>
             <p className="mt-2 text-xs text-neutral-400">Al alcanzar el umbral, el embajador sube de nivel automáticamente. Canje: Normal solo producto · Plata hasta 50% efectivo · Oro libre.</p>
+          </div>
+
+          <div className="border-t border-neutral-100 pt-4">
+            <p className="mb-3 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-amber-600"><Crown className="h-3.5 w-3.5" /> Explicación de los beneficios (página de embajadores)</p>
+            <p className="mb-3 text-xs text-neutral-400">Lo que se muestra al desplegar cada beneficio. Si lo dejas vacío, se genera automáticamente con tus % y umbrales.</p>
+            <div className="space-y-3">
+              <Field label="Beneficio: Gana comisión"><textarea rows={3} className={`${input} resize-none`} value={infoComision} onChange={(e) => setInfoComision(e.target.value)} placeholder="(Automático si lo dejas vacío)" /></Field>
+              <Field label="Beneficio: Premia a tus amigos"><textarea rows={2} className={`${input} resize-none`} value={infoDescuento} onChange={(e) => setInfoDescuento(e.target.value)} placeholder="(Automático si lo dejas vacío)" /></Field>
+              <Field label="Beneficio: Sube de nivel"><textarea rows={3} className={`${input} resize-none`} value={infoNiveles} onChange={(e) => setInfoNiveles(e.target.value)} placeholder="(Automático si lo dejas vacío)" /></Field>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">

@@ -50,9 +50,22 @@ export default defineSchema({
         thresholdMetric: v.optional(v.union(v.literal("sales"), v.literal("amount"))), // por nº de ventas o monto vendido
         plataMin: v.optional(v.number()), // umbral para subir a Plata
         oroMin: v.optional(v.number()), // umbral para subir a Oro
+        // Textos explicativos de los beneficios (opcionales; si se dejan vacíos se genera uno automático)
+        infoComision: v.optional(v.string()),
+        infoDescuento: v.optional(v.string()),
+        infoNiveles: v.optional(v.string()),
       })
     ),
   }),
+
+  // Dudas/mensajes de aspirantes a embajador
+  inquiries: defineTable({
+    name: v.string(),
+    contact: v.string(),       // correo o WhatsApp
+    message: v.string(),
+    status: v.union(v.literal("new"), v.literal("resolved")),
+    createdAt: v.number(),
+  }).index("by_status", ["status"]),
 
   // Cupones de descuento
   coupons: defineTable({

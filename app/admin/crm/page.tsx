@@ -7,7 +7,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import {
   Package, Users, Crown, Megaphone, ChevronLeft, ChevronDown, ChevronUp,
-  Truck, Send, StickyNote, Search, Plus, X, Trash2,
+  Truck, Send, StickyNote, Search, Plus, X, Trash2, MessageCircle,
 } from "lucide-react";
 
 const KEY_STORAGE = "nosterra_admin_key";
@@ -537,6 +537,7 @@ function EmbajadoresTab({ adminKey }: { adminKey: string }) {
 
   return (
     <div className="space-y-4">
+      <InquiriesPanel adminKey={adminKey} />
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
@@ -611,6 +612,44 @@ function EmbajadoresTab({ adminKey }: { adminKey: string }) {
             </tbody>
           </table>
         </div>
+      )}
+    </div>
+  );
+}
+
+function InquiriesPanel({ adminKey }: { adminKey: string }) {
+  const inquiries = useQuery(api.crm.listInquiries, { adminKey });
+  const resolve = useMutation(api.crm.resolveInquiry);
+  const [open, setOpen] = useState(false);
+  const news = (inquiries ?? []).filter((i) => i.status === "new");
+  if (!inquiries || inquiries.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50">
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between px-5 py-3">
+        <span className="flex items-center gap-2 text-sm font-medium text-amber-800">
+          <MessageCircle className="h-4 w-4" /> Dudas de aspirantes
+          {news.length > 0 && <span className="rounded-full bg-amber-600 px-2 py-0.5 text-[11px] text-white">{news.length} nuevas</span>}
+        </span>
+        {open ? <ChevronUp className="h-4 w-4 text-amber-700" /> : <ChevronDown className="h-4 w-4 text-amber-700" />}
+      </button>
+      {open && (
+        <ul className="divide-y divide-amber-100 border-t border-amber-100">
+          {inquiries.map((i) => (
+            <li key={i._id} className={`px-5 py-3 ${i.status === "resolved" ? "opacity-50" : ""}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-neutral-900">{i.name} <span className="font-normal text-neutral-500">· {i.contact}</span></p>
+                  <p className="mt-0.5 text-sm text-neutral-700 whitespace-pre-line">{i.message}</p>
+                  <p className="mt-1 text-[11px] text-neutral-400">{new Date(i.createdAt).toLocaleString("es-MX")}</p>
+                </div>
+                {i.status === "new" && (
+                  <button onClick={() => resolve({ adminKey, id: i._id })} className="whitespace-nowrap rounded-md border border-amber-300 px-3 py-1 text-xs text-amber-700 hover:bg-amber-100">Marcar resuelta</button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

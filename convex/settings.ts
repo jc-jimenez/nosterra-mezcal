@@ -43,6 +43,9 @@ export const upsert = mutation({
           thresholdMetric: v.optional(v.union(v.literal("sales"), v.literal("amount"))),
           plataMin: v.optional(v.number()),
           oroMin: v.optional(v.number()),
+          infoComision: v.optional(v.string()),
+          infoDescuento: v.optional(v.string()),
+          infoNiveles: v.optional(v.string()),
         })
       ),
     }),

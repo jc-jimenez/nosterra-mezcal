@@ -238,6 +238,29 @@ export const sendOwnerNewOrder = internalAction({
   },
 });
 
+// Aviso al responsable cuando un aspirante envía una duda
+export const sendInquiryNotification = internalAction({
+  args: { to: v.string(), name: v.string(), contact: v.string(), message: v.string() },
+  handler: async (_ctx, { to, name, contact, message }) => {
+    const apiKey = process.env.RESEND_API_KEY;
+    const from = process.env.EMAIL_FROM || "NOSTERRA <onboarding@resend.dev>";
+    if (!apiKey || !to) return { ok: false };
+    const html = layout("💬 Nueva duda de un aspirante a embajador", `
+      <div style="background:#f9f7f4;border-radius:10px;padding:16px 18px;margin-bottom:16px">
+        <p style="margin:0 0 4px;font-size:14px;color:#3a3a34"><strong>Nombre:</strong> ${name}</p>
+        <p style="margin:0 0 4px;font-size:14px;color:#3a3a34"><strong>Contacto:</strong> ${contact}</p>
+      </div>
+      <p style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#9a9486;margin:0 0 6px">Mensaje</p>
+      <p style="font-size:15px;line-height:1.7;color:#3a3a34;margin:0;white-space:pre-line">${message}</p>`);
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from, to: [to], subject: `💬 Duda de embajador: ${name}`, html }),
+    });
+    return res.ok ? { ok: true } : { ok: false };
+  },
+});
+
 // Aviso al dueño/operador cuando entra una solicitud de embajador
 export const sendOwnerNewAmbassador = internalAction({
   args: { to: v.string(), name: v.string(), email: v.string(), whatsapp: v.optional(v.string()), code: v.string() },
