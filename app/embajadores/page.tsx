@@ -20,54 +20,54 @@ export default function EmbajadoresPage() {
       <Navbar />
       <CartDrawer />
       <main className="flex-1 pt-24">
-        <Hero />
-        <Apply />
+        <ApplySection />
       </main>
       <Footer />
     </>
   );
 }
 
-function Hero() {
-  const settings = useStoreSettings();
-  const benefits = [
-    { icon: TrendingUp, title: "Gana comisión", desc: `Recibe una comisión por cada venta hecha con tu código.` },
-    { icon: Gift, title: "Premia a tus amigos", desc: `Quien use tu código recibe ${settings.ambassador?.customerDiscount ?? 5}% de descuento.` },
-    { icon: Crown, title: "Sube de nivel", desc: "Normal, Plata y Oro: a mayor nivel, mayor comisión." },
-  ];
+function ApplySection() {
   return (
     <section className="bg-greca bg-obsidian py-16">
-      <div className="mx-auto max-w-3xl px-6 text-center">
-        <p className="font-body text-xs uppercase tracking-[0.3em] text-gold">Programa de embajadores</p>
-        <h1 className="mt-4 font-display text-5xl font-light text-ivory">
-          Comparte NOSTERRA, <span className="italic text-gradient-gold">gana con cada botella</span>
-        </h1>
-        <p className="mx-auto mt-5 max-w-xl font-body text-base leading-relaxed text-muted">
-          ¿Amas nuestro mezcal? Conviértete en embajador de marca: recibe tu código personal,
-          tus referidos obtienen descuento y tú ganas comisión que te pagamos con cupones.
-        </p>
-        <div className="mt-10 grid gap-5 sm:grid-cols-3">
-          {benefits.map((b) => (
-            <div key={b.title} className="rounded-2xl border border-gold/15 bg-smoke p-6 text-left">
-              <b.icon className="h-6 w-6 text-gold" />
-              <h3 className="mt-3 font-display text-xl text-ivory">{b.title}</h3>
-              <p className="mt-1.5 font-body text-sm text-muted">{b.desc}</p>
-            </div>
-          ))}
-        </div>
+      <div className="mx-auto grid max-w-7xl gap-8 px-6 lg:grid-cols-3 lg:items-start">
+        <Intro />
+        <ApplyForm />
+        <AccountPanel />
       </div>
     </section>
   );
 }
 
-function Apply() {
+function Intro() {
+  const settings = useStoreSettings();
+  const benefits = [
+    { icon: TrendingUp, title: "Gana comisión", desc: "Recibe una comisión por cada venta hecha con tu código." },
+    { icon: Gift, title: "Premia a tus amigos", desc: `Quien use tu código recibe ${settings.ambassador?.customerDiscount ?? 5}% de descuento.` },
+    { icon: Crown, title: "Sube de nivel", desc: "Normal, Plata y Oro: a mayor nivel, mayor comisión." },
+  ];
   return (
-    <section className="bg-smoke py-16">
-      <div className="mx-auto grid max-w-6xl gap-10 px-6 lg:grid-cols-2">
-        <ApplyForm />
-        <AccountPanel />
+    <div>
+      <p className="font-body text-xs uppercase tracking-[0.3em] text-gold">Programa de embajadores</p>
+      <h1 className="mt-4 font-display text-4xl font-light leading-tight text-ivory">
+        Comparte NOSTERRA, <span className="italic text-gradient-gold">gana con cada botella</span>
+      </h1>
+      <p className="mt-4 font-body text-sm leading-relaxed text-muted">
+        ¿Amas nuestro mezcal? Conviértete en embajador de marca: recibe tu código personal,
+        tus referidos obtienen descuento y tú ganas comisión que te pagamos con cupones.
+      </p>
+      <div className="mt-8 space-y-4">
+        {benefits.map((b) => (
+          <div key={b.title} className="flex gap-4 rounded-2xl border border-gold/15 bg-smoke p-5">
+            <b.icon className="h-6 w-6 flex-shrink-0 text-gold" />
+            <div>
+              <h3 className="font-display text-lg text-ivory">{b.title}</h3>
+              <p className="mt-0.5 font-body text-sm text-muted">{b.desc}</p>
+            </div>
+          </div>
+        ))}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -109,7 +109,7 @@ function ApplyForm() {
   }
 
   return (
-    <div className="rounded-2xl border border-gold/15 bg-obsidian/40 p-8">
+    <div className="rounded-2xl border border-gold/15 bg-smoke p-6 sm:p-7">
       <h2 className="font-display text-2xl text-ivory">Quiero ser embajador</h2>
       {result ? (
         <div className="mt-6 text-center">
@@ -221,7 +221,7 @@ function AccountPanel() {
   }
 
   return (
-    <div className="rounded-2xl border border-gold/15 bg-obsidian/40 p-8">
+    <div className="rounded-2xl border border-gold/15 bg-smoke p-6 sm:p-7">
       <h2 className="font-display text-2xl text-ivory">Mi cuenta de embajador</h2>
       <p className="mt-2 font-body text-sm text-muted">Entra con tu correo y PIN para ver y redimir tus comisiones.</p>
       <div className="mt-6 space-y-2">
