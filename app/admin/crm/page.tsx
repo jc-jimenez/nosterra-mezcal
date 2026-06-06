@@ -7,7 +7,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import {
   Package, Users, Crown, Megaphone, ChevronLeft, ChevronDown, ChevronUp,
-  Truck, Send, StickyNote, Search,
+  Truck, Send, StickyNote, Search, Plus, X, Trash2,
 } from "lucide-react";
 
 const KEY_STORAGE = "nosterra_admin_key";
@@ -100,6 +100,7 @@ function PedidosTab({ adminKey }: { adminKey: string }) {
   const [trackingFor, setTrackingFor] = useState<string | null>(null);
   const [carrier, setCarrier] = useState("");
   const [tracking, setTracking] = useState("");
+  const [showNew, setShowNew] = useState(false);
 
   async function doAdvance(o: NonNullable<typeof active>[number], status: string, needsTracking?: boolean) {
     if (needsTracking) {
@@ -116,7 +117,12 @@ function PedidosTab({ adminKey }: { adminKey: string }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="font-semibold text-neutral-900">Pedidos activos {active && <span className="text-neutral-400">({active.length})</span>}</h2>
+        <button onClick={() => setShowNew(true)} className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700">
+          <Plus className="h-4 w-4" /> Nuevo pedido
+        </button>
       </div>
+
+      {showNew && <NewOrderModal adminKey={adminKey} onClose={() => setShowNew(false)} />}
 
       {active === undefined ? (
         <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-neutral-100" />)}</div>
@@ -274,6 +280,148 @@ function OrderDetail({ o, adminKey, onCancel }: { o: any; adminKey: string; onCa
   );
 }
 
+// ─── NUEVO PEDIDO MANUAL ─────────────────────────────────────────────────────
+
+type LineItem = { slug: string; name: string; price: number; qty: number; productId?: Id<"products"> };
+
+function NewOrderModal({ adminKey, onClose }: { adminKey: string; onClose: () => void }) {
+  const products = useQuery(api.products.listActive);
+  const createOrder = useMutation(api.crm.createManualOrder);
+  const [c, setC] = useState({ name: "", email: "", phone: "" });
+  const [addr, setAddr] = useState({ calle: "", numero: "", colonia: "", cp: "", ciudad: "", estado: "", referencias: "" });
+  const [items, setItems] = useState<LineItem[]>([]);
+  const [shipping, setShipping] = useState("150");
+  const [discount, setDiscount] = useState("0");
+  const [ambCode, setAmbCode] = useState("");
+  const [payment, setPayment] = useState("Efectivo");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function addProduct(slug: string) {
+    const p = products?.find((x) => x.slug === slug);
+    if (!p) return;
+    if (items.find((i) => i.slug === slug)) return;
+    setItems((prev) => [...prev, { slug: p.slug, name: p.name, price: p.price, qty: 1, productId: p._id }]);
+  }
+  function updateQty(slug: string, qty: number) {
+    setItems((prev) => prev.map((i) => (i.slug === slug ? { ...i, qty: Math.max(1, qty) } : i)));
+  }
+  function updatePrice(slug: string, price: number) {
+    setItems((prev) => prev.map((i) => (i.slug === slug ? { ...i, price: Math.max(0, price) } : i)));
+  }
+  function removeItem(slug: string) {
+    setItems((prev) => prev.filter((i) => i.slug !== slug));
+  }
+
+  const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
+  const total = Math.max(0, subtotal + (Number(shipping) || 0) - (Number(discount) || 0));
+
+  async function submit() {
+    setError("");
+    if (!c.name.trim() || !c.email.trim()) { setError("Nombre y correo del cliente son obligatorios."); return; }
+    if (items.length === 0) { setError("Agrega al menos un producto."); return; }
+    if (!addr.calle || !addr.cp || !addr.ciudad || !addr.estado) { setError("Completa la dirección (calle, CP, ciudad, estado)."); return; }
+    setSaving(true);
+    try {
+      const r = await createOrder({
+        adminKey,
+        customerName: c.name.trim(),
+        customerEmail: c.email.trim(),
+        customerPhone: c.phone.trim() || undefined,
+        shippingAddress: { ...addr, pais: "México", referencias: addr.referencias || undefined },
+        items: items.map((i) => ({ productId: i.productId, slug: i.slug, name: i.name, price: i.price, qty: i.qty })),
+        shipping: Number(shipping) || 0,
+        discount: Number(discount) || undefined,
+        ambassadorCode: ambCode.trim() ? ambCode.trim().toUpperCase() : undefined,
+        paymentMethod: payment,
+      });
+      alert(`Pedido ${r.orderNumber} creado. Se envió confirmación al cliente.`);
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al crear el pedido");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const fld = "w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm bg-white text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-600";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
+      <div className="my-8 w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">
+        <div className="mb-5 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-neutral-900">Nuevo pedido manual</h3>
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-900"><X className="h-5 w-5" /></button>
+        </div>
+
+        {/* Cliente */}
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">Cliente</p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <input className={fld} placeholder="Nombre completo *" value={c.name} onChange={(e) => setC({ ...c, name: e.target.value })} />
+          <input className={fld} type="email" placeholder="Correo *" value={c.email} onChange={(e) => setC({ ...c, email: e.target.value })} />
+          <input className={fld} placeholder="Teléfono / WhatsApp" value={c.phone} onChange={(e) => setC({ ...c, phone: e.target.value })} />
+        </div>
+
+        {/* Dirección */}
+        <p className="mb-2 mt-4 text-xs font-medium uppercase tracking-wide text-neutral-400">Dirección de envío</p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <input className={`${fld} sm:col-span-2`} placeholder="Calle *" value={addr.calle} onChange={(e) => setAddr({ ...addr, calle: e.target.value })} />
+          <input className={fld} placeholder="Número *" value={addr.numero} onChange={(e) => setAddr({ ...addr, numero: e.target.value })} />
+          <input className={fld} placeholder="Colonia" value={addr.colonia} onChange={(e) => setAddr({ ...addr, colonia: e.target.value })} />
+          <input className={fld} placeholder="C.P. *" value={addr.cp} onChange={(e) => setAddr({ ...addr, cp: e.target.value })} />
+          <input className={fld} placeholder="Ciudad *" value={addr.ciudad} onChange={(e) => setAddr({ ...addr, ciudad: e.target.value })} />
+          <input className={`${fld} sm:col-span-2`} placeholder="Estado *" value={addr.estado} onChange={(e) => setAddr({ ...addr, estado: e.target.value })} />
+          <input className={fld} placeholder="Referencias" value={addr.referencias} onChange={(e) => setAddr({ ...addr, referencias: e.target.value })} />
+        </div>
+
+        {/* Productos */}
+        <p className="mb-2 mt-4 text-xs font-medium uppercase tracking-wide text-neutral-400">Productos</p>
+        <select className={fld} value="" onChange={(e) => { addProduct(e.target.value); e.target.value = ""; }}>
+          <option value="">+ Agregar producto…</option>
+          {products?.map((p) => <option key={p.slug} value={p.slug}>{p.name} — ${p.price.toLocaleString("es-MX")}</option>)}
+        </select>
+        {items.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {items.map((i) => (
+              <div key={i.slug} className="flex items-center gap-2 rounded-lg border border-neutral-200 px-3 py-2">
+                <span className="flex-1 text-sm text-neutral-800">{i.name}</span>
+                <input type="number" className={`${fld} w-20`} value={i.price} onChange={(e) => updatePrice(i.slug, Number(e.target.value))} />
+                <span className="text-neutral-400">×</span>
+                <input type="number" className={`${fld} w-16`} value={i.qty} onChange={(e) => updateQty(i.slug, Number(e.target.value))} />
+                <span className="w-20 text-right text-sm font-medium text-neutral-800">${(i.price * i.qty).toLocaleString("es-MX")}</span>
+                <button onClick={() => removeItem(i.slug)} className="text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Totales y pago */}
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <label className="text-xs text-neutral-500"><span className="mb-1 block">Envío (MXN)</span><input type="number" className={fld} value={shipping} onChange={(e) => setShipping(e.target.value)} /></label>
+          <label className="text-xs text-neutral-500"><span className="mb-1 block">Descuento (MXN)</span><input type="number" className={fld} value={discount} onChange={(e) => setDiscount(e.target.value)} /></label>
+          <label className="text-xs text-neutral-500"><span className="mb-1 block">Forma de pago</span>
+            <select className={fld} value={payment} onChange={(e) => setPayment(e.target.value)}>
+              <option>Efectivo</option><option>Transferencia</option><option>Depósito</option><option>Link de pago</option><option>Otro</option>
+            </select>
+          </label>
+        </div>
+        <label className="mt-3 block text-xs text-neutral-500"><span className="mb-1 block">Código de embajador (opcional — acredita comisión)</span>
+          <input className={fld} placeholder="MARIA" value={ambCode} onChange={(e) => setAmbCode(e.target.value.toUpperCase())} />
+        </label>
+
+        <div className="mt-4 flex items-center justify-between border-t border-neutral-100 pt-4">
+          <span className="text-sm text-neutral-500">Total: <span className="text-lg font-semibold text-neutral-900">${total.toLocaleString("es-MX")}</span></span>
+          <div className="flex items-center gap-3">
+            <button onClick={onClose} className="rounded-lg border border-neutral-300 px-5 py-2.5 text-sm hover:bg-neutral-50">Cancelar</button>
+            <button onClick={submit} disabled={saving} className="rounded-lg bg-amber-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50">{saving ? "Creando…" : "Crear pedido"}</button>
+          </div>
+        </div>
+        {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
+      </div>
+    </div>
+  );
+}
+
 // ─── CLIENTES ────────────────────────────────────────────────────────────────
 
 function ClientesTab({ adminKey }: { adminKey: string }) {
@@ -374,6 +522,7 @@ function EmbajadoresTab({ adminKey }: { adminKey: string }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<string>("activos");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [showNew, setShowNew] = useState(false);
 
   const THIRTY = 30 * 24 * 60 * 60 * 1000;
   const now = Date.now();
@@ -398,7 +547,12 @@ function EmbajadoresTab({ adminKey }: { adminKey: string }) {
             <button key={id} onClick={() => setFilter(id)} className={`rounded-full px-3 py-1 text-xs font-medium ${filter === id ? "bg-amber-600 text-white" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"}`}>{label}</button>
           ))}
         </div>
+        <button onClick={() => setShowNew(true)} className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700">
+          <Plus className="h-4 w-4" /> Nuevo embajador
+        </button>
       </div>
+
+      {showNew && <NewAmbassadorModal adminKey={adminKey} onClose={() => setShowNew(false)} />}
 
       {ambs === undefined ? (
         <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-neutral-100" />)}</div>
@@ -481,6 +635,73 @@ function AmbNotes({ id, initial, onSave }: { adminKey: string; id: Id<"ambassado
         onBlur={() => { onSave(notes); setSaved(true); }} />
       {saved && <span className="text-[11px] text-emerald-600">✓ Guardado</span>}
     </>
+  );
+}
+
+function NewAmbassadorModal({ adminKey, onClose }: { adminKey: string; onClose: () => void }) {
+  const create = useMutation(api.ambassadors.adminCreate);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [tier, setTier] = useState<"normal" | "plata" | "oro">("normal");
+  const [code, setCode] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<{ code: string; pin: string } | null>(null);
+  const [error, setError] = useState("");
+
+  const fld = "w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm bg-white text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-600";
+
+  async function submit() {
+    setError("");
+    if (!name.trim() || !email.trim()) { setError("Nombre y correo son obligatorios."); return; }
+    setSaving(true);
+    try {
+      const r = await create({ adminKey, name: name.trim(), email: email.trim(), tier, customCode: code.trim() || undefined });
+      setResult({ code: r.code, pin: r.pin });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
+      <div className="my-12 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <div className="mb-5 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-neutral-900">Nuevo embajador</h3>
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-900"><X className="h-5 w-5" /></button>
+        </div>
+
+        {result ? (
+          <div className="text-center">
+            <p className="text-sm text-neutral-600">Embajador creado y activado. Se le envió su acceso por correo.</p>
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-xs uppercase tracking-wide text-neutral-500">Código</p>
+              <p className="font-mono text-2xl tracking-widest text-amber-700">{result.code}</p>
+              <p className="mt-2 text-xs uppercase tracking-wide text-neutral-500">PIN</p>
+              <p className="font-mono text-2xl tracking-[0.3em] text-neutral-900">{result.pin}</p>
+            </div>
+            <button onClick={onClose} className="mt-5 w-full rounded-lg bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-800">Listo</button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs text-neutral-500">Para influencers o recomendados que no quieren registrarse. Queda activo de inmediato y recibe su acceso por correo.</p>
+            <input className={fld} placeholder="Nombre completo *" value={name} onChange={(e) => setName(e.target.value)} />
+            <input className={fld} type="email" placeholder="Correo *" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <div className="grid grid-cols-2 gap-3">
+              <select className={fld} value={tier} onChange={(e) => setTier(e.target.value as typeof tier)}>
+                <option value="normal">Nivel Normal</option>
+                <option value="plata">Nivel Plata</option>
+                <option value="oro">Nivel Oro</option>
+              </select>
+              <input className={fld} placeholder="Código (opcional)" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} />
+            </div>
+            {error && <p className="text-sm text-red-500">{error}</p>}
+            <button onClick={submit} disabled={saving} className="w-full rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50">{saving ? "Creando…" : "Crear y enviar acceso"}</button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

@@ -132,6 +132,18 @@ export const apply = mutation({
       name: fullName,
       type: "pending",
     });
+    // Aviso al dueño/operador de la nueva solicitud
+    const settings = await ctx.db.query("settings").first();
+    const ownerEmail = settings?.notifyAmbassadorsEmail || process.env.OWNER_EMAIL || "";
+    if (ownerEmail) {
+      await ctx.scheduler.runAfter(0, internal.emails.sendOwnerNewAmbassador, {
+        to: ownerEmail,
+        name: fullName,
+        email: mail,
+        whatsapp: args.whatsapp,
+        code,
+      });
+    }
     return { ok: true as const, alreadyExists: false, code, pin, status: "pending" as const };
   },
 });

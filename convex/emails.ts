@@ -186,6 +186,7 @@ export const sendOrderConfirmation = internalAction({
 // Aviso al dueño/operador cuando entra un pedido pagado
 export const sendOwnerNewOrder = internalAction({
   args: {
+    to: v.string(),
     orderNumber: v.string(),
     customerName: v.string(),
     customerEmail: v.string(),
@@ -196,13 +197,14 @@ export const sendOwnerNewOrder = internalAction({
     ambassadorCode: v.optional(v.string()),
     city: v.string(),
     state: v.string(),
+    isManual: v.optional(v.boolean()),
   },
   handler: async (_ctx, args) => {
     const apiKey = process.env.RESEND_API_KEY;
     const from = process.env.EMAIL_FROM || "NOSTERRA <onboarding@resend.dev>";
-    const to = process.env.OWNER_EMAIL;
+    const to = args.to;
     if (!apiKey || !to) {
-      console.warn("RESEND_API_KEY u OWNER_EMAIL no configuradas — se omite el aviso de pedido.");
+      console.warn("RESEND_API_KEY o correo destino no configurado — se omite el aviso de pedido.");
       return { ok: false, skipped: true };
     }
 
@@ -212,7 +214,7 @@ export const sendOwnerNewOrder = internalAction({
 
     const html = layout(`🛎️ Nuevo pedido: ${args.orderNumber}`, `
       <p style="font-size:15px;line-height:1.7;color:#3a3a34;margin:0 0 16px">
-        Entró un pedido pagado por <strong>$${args.total.toLocaleString("es-MX")} MXN</strong>.
+        Entró un pedido${args.isManual ? " (capturado manualmente)" : " pagado"} por <strong>$${args.total.toLocaleString("es-MX")} MXN</strong>.
       </p>
       <div style="background:#f9f7f4;border-radius:10px;padding:16px 18px;margin-bottom:16px">
         <p style="margin:0 0 4px;font-size:14px;color:#3a3a34"><strong>Cliente:</strong> ${args.customerName}</p>
@@ -231,6 +233,37 @@ export const sendOwnerNewOrder = internalAction({
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from, to: [to], subject: `🛎️ Nuevo pedido ${args.orderNumber} · $${args.total.toLocaleString("es-MX")}`, html }),
+    });
+    return res.ok ? { ok: true } : { ok: false };
+  },
+});
+
+// Aviso al dueño/operador cuando entra una solicitud de embajador
+export const sendOwnerNewAmbassador = internalAction({
+  args: { to: v.string(), name: v.string(), email: v.string(), whatsapp: v.optional(v.string()), code: v.string() },
+  handler: async (_ctx, { to, name, email, whatsapp, code }) => {
+    const apiKey = process.env.RESEND_API_KEY;
+    const from = process.env.EMAIL_FROM || "NOSTERRA <onboarding@resend.dev>";
+    if (!apiKey || !to) { console.warn("Falta config para aviso de embajador"); return { ok: false }; }
+
+    const html = layout("🏅 Nueva solicitud de embajador", `
+      <p style="font-size:15px;line-height:1.7;color:#3a3a34;margin:0 0 16px">
+        <strong>${name}</strong> quiere ser embajador de NOSTERRA.
+      </p>
+      <div style="background:#f9f7f4;border-radius:10px;padding:16px 18px;margin-bottom:16px">
+        <p style="margin:0 0 4px;font-size:14px;color:#3a3a34"><strong>Correo:</strong> ${email}</p>
+        ${whatsapp ? `<p style="margin:0 0 4px;font-size:14px;color:#3a3a34"><strong>WhatsApp:</strong> ${whatsapp}</p>` : ""}
+        <p style="margin:0;font-size:14px;color:#3a3a34"><strong>Código sugerido:</strong> ${code}</p>
+      </div>
+      <p style="font-size:14px;color:#6a6458;margin:0 0 14px">Apruébala o recházala desde el panel de administración.</p>
+      <div style="text-align:center;margin:22px 0 6px">
+        <a href="https://www.nosterramezcal.com/admin" style="display:inline-block;background:${BRAND};color:${DARK};text-decoration:none;padding:13px 30px;border-radius:8px;font-size:14px;font-weight:600">Revisar solicitud</a>
+      </div>`);
+
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from, to: [to], subject: `🏅 Nueva solicitud de embajador: ${name}`, html }),
     });
     return res.ok ? { ok: true } : { ok: false };
   },

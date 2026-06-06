@@ -32,6 +32,8 @@ export const upsert = mutation({
       freeShippingFrom: v.number(),
       shippingCost: v.number(),
       currency: v.string(),
+      notifyOrdersEmail: v.optional(v.string()),
+      notifyAmbassadorsEmail: v.optional(v.string()),
       ambassador: v.optional(
         v.object({
           tierNormal: v.number(),

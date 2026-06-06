@@ -36,6 +36,9 @@ export default defineSchema({
     freeShippingFrom: v.number(),
     shippingCost: v.optional(v.number()), // tarifa fija de envío (MXN)
     currency: v.string(),
+    // Correos de aviso interno (configurables desde el panel)
+    notifyOrdersEmail: v.optional(v.string()),      // recibe avisos de pedidos nuevos
+    notifyAmbassadorsEmail: v.optional(v.string()), // recibe avisos de nuevas solicitudes de embajador
     // Programa de embajadores (Fase 2) — comisión por nivel + descuento al cliente
     ambassador: v.optional(
       v.object({
@@ -199,6 +202,8 @@ export default defineSchema({
     paymentId: v.optional(v.string()),
     stockApplied: v.boolean(),
     // CRM
+    isManual: v.optional(v.boolean()),        // pedido capturado manualmente
+    paymentMethod: v.optional(v.string()),    // efectivo, transferencia, etc. (manual)
     trackingNumber: v.optional(v.string()),  // número de guía
     carrier: v.optional(v.string()),          // DHL, FedEx, Estafeta…
     adminNotes: v.optional(v.string()),       // notas internas

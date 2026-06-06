@@ -191,7 +191,10 @@ export const markPayment = mutation({
         const amb = await ctx.db.get(order.ambassadorId);
         ambCode = amb?.code;
       }
-      await ctx.scheduler.runAfter(0, internal.emails.sendOwnerNewOrder, {
+      const settings = await ctx.db.query("settings").first();
+      const ownerEmail = settings?.notifyOrdersEmail || process.env.OWNER_EMAIL || "";
+      if (ownerEmail) await ctx.scheduler.runAfter(0, internal.emails.sendOwnerNewOrder, {
+        to: ownerEmail,
         orderNumber: order.orderNumber,
         customerName: order.customerName,
         customerEmail: order.customerEmail,

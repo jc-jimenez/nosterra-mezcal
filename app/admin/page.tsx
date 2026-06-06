@@ -339,14 +339,16 @@ function SettingsCard({
   settings,
   onSave,
 }: {
-  settings: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost?: number; currency: string; ambassador?: { tierNormal: number; tierPlata: number; tierOro: number; customerDiscount: number; thresholdMetric?: "sales" | "amount"; plataMin?: number; oroMin?: number } } | undefined;
-  onSave: (d: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost: number; currency: string; ambassador: { tierNormal: number; tierPlata: number; tierOro: number; customerDiscount: number; thresholdMetric: "sales" | "amount"; plataMin: number; oroMin: number } }) => Promise<void>;
+  settings: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost?: number; currency: string; notifyOrdersEmail?: string; notifyAmbassadorsEmail?: string; ambassador?: { tierNormal: number; tierPlata: number; tierOro: number; customerDiscount: number; thresholdMetric?: "sales" | "amount"; plataMin?: number; oroMin?: number } } | undefined;
+  onSave: (d: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost: number; currency: string; notifyOrdersEmail: string; notifyAmbassadorsEmail: string; ambassador: { tierNormal: number; tierPlata: number; tierOro: number; customerDiscount: number; thresholdMetric: "sales" | "amount"; plataMin: number; oroMin: number } }) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [wa, setWa] = useState("");
   const [note, setNote] = useState("");
   const [free, setFree] = useState("");
   const [cost, setCost] = useState("");
+  const [notifyOrders, setNotifyOrders] = useState("");
+  const [notifyAmbs, setNotifyAmbs] = useState("");
   const [tNormal, setTNormal] = useState("2");
   const [tPlata, setTPlata] = useState("3");
   const [tOro, setTOro] = useState("5");
@@ -363,6 +365,8 @@ function SettingsCard({
       setNote(settings.shippingNote);
       setFree(String(settings.freeShippingFrom));
       setCost(String(settings.shippingCost ?? 150));
+      setNotifyOrders(settings.notifyOrdersEmail ?? "");
+      setNotifyAmbs(settings.notifyAmbassadorsEmail ?? "");
       const amb = settings.ambassador;
       setTNormal(String(amb?.tierNormal ?? 2));
       setTPlata(String(amb?.tierPlata ?? 3));
@@ -380,6 +384,7 @@ function SettingsCard({
       await onSave({
         whatsappNumber: wa.trim(), shippingNote: note.trim(),
         freeShippingFrom: Number(free) || 0, shippingCost: Number(cost) || 0, currency: "MXN",
+        notifyOrdersEmail: notifyOrders.trim(), notifyAmbassadorsEmail: notifyAmbs.trim(),
         ambassador: {
           tierNormal: Number(tNormal) || 0, tierPlata: Number(tPlata) || 0,
           tierOro: Number(tOro) || 0, customerDiscount: Number(custDisc) || 0,
@@ -403,6 +408,15 @@ function SettingsCard({
             <Field label="Costo de envío (MXN)"><input type="number" className={input} value={cost} onChange={(e) => setCost(e.target.value)} /></Field>
             <Field label="Envío gratis desde (MXN)"><input type="number" className={input} value={free} onChange={(e) => setFree(e.target.value)} /></Field>
             <Field label="Nota de envío"><input className={input} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+          </div>
+
+          <div className="border-t border-neutral-100 pt-4">
+            <p className="mb-3 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-amber-600">✉️ Correos de aviso interno</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Avisos de pedidos nuevos"><input type="email" className={input} value={notifyOrders} onChange={(e) => setNotifyOrders(e.target.value)} placeholder="ventas@nosterramezcal.com" /></Field>
+              <Field label="Avisos de nuevos embajadores"><input type="email" className={input} value={notifyAmbs} onChange={(e) => setNotifyAmbs(e.target.value)} placeholder="embajadores@nosterramezcal.com" /></Field>
+            </div>
+            <p className="mt-2 text-xs text-neutral-400">Puedes usar el mismo correo en ambos. Si los dejas vacíos, se usa el correo configurado por defecto.</p>
           </div>
 
           <div className="border-t border-neutral-100 pt-4">

@@ -1,6 +1,7 @@
 import { query, mutation, internalMutation, action } from "./_generated/server";
 import { v } from "convex/values";
 import { internal, api } from "./_generated/api";
+import { promoteIfEligible } from "./ambassadors";
 
 function assertAdmin(key: string) {
   const expected = process.env.ADMIN_PASSWORD;
@@ -34,6 +35,150 @@ export const listClosed = query({
       .withIndex("by_status", (q) => q.eq("status", "cerrado"))
       .order("desc")
       .take(limit ?? 100);
+  },
+});
+
+// Crea un pedido manualmente (ventas externas: WhatsApp, efectivo, influencer)
+export const createManualOrder = mutation({
+  args: {
+    adminKey: v.string(),
+    customerName: v.string(),
+    customerEmail: v.string(),
+    customerPhone: v.optional(v.string()),
+    shippingAddress: v.object({
+      calle: v.string(), numero: v.string(), colonia: v.string(),
+      cp: v.string(), ciudad: v.string(), estado: v.string(),
+      pais: v.string(), referencias: v.optional(v.string()),
+    }),
+    items: v.array(v.object({
+      productId: v.optional(v.id("products")),
+      slug: v.string(), name: v.string(), price: v.number(), qty: v.number(),
+    })),
+    shipping: v.number(),
+    discount: v.optional(v.number()),
+    couponCode: v.optional(v.string()),
+    ambassadorCode: v.optional(v.string()),
+    paymentMethod: v.string(),
+  },
+  handler: async (ctx, args) => {
+    assertAdmin(args.adminKey);
+
+    const subtotal = args.items.reduce((s, i) => s + i.price * i.qty, 0);
+    const total = Math.max(0, subtotal + args.shipping - (args.discount ?? 0));
+
+    const count = (await ctx.db.query("orders").collect()).length;
+    const year = new Date().getFullYear();
+    const orderNumber = `NOST-${year}-${String(count + 1).padStart(4, "0")}`;
+
+    // Embajador por código (si se indicó)
+    let ambassadorId: import("./_generated/dataModel").Id<"ambassadors"> | undefined;
+    let commission = 0;
+    if (args.ambassadorCode) {
+      const amb = await ctx.db
+        .query("ambassadors")
+        .withIndex("by_code", (q) => q.eq("code", args.ambassadorCode!.toUpperCase()))
+        .unique();
+      if (amb && amb.isActive) {
+        ambassadorId = amb._id;
+        commission = Math.round((subtotal * amb.commissionPct) / 100);
+      }
+    }
+
+    const orderId = await ctx.db.insert("orders", {
+      orderNumber,
+      customerName: args.customerName,
+      customerEmail: args.customerEmail.trim().toLowerCase(),
+      customerPhone: args.customerPhone,
+      shippingAddress: args.shippingAddress,
+      items: args.items,
+      subtotal,
+      shipping: args.shipping,
+      discount: args.discount,
+      couponCode: args.couponCode,
+      ambassadorId,
+      commission: commission || undefined,
+      total,
+      status: "nuevo",
+      paymentStatus: "approved",
+      paymentId: "MANUAL",
+      isManual: true,
+      paymentMethod: args.paymentMethod,
+      stockApplied: true,
+      statusHistory: [{ status: "nuevo", at: Date.now(), note: `Manual · ${args.paymentMethod}` }],
+    });
+
+    // Descontar stock
+    for (const item of args.items) {
+      const product = item.productId
+        ? await ctx.db.get(item.productId)
+        : await ctx.db.query("products").withIndex("by_slug", (q) => q.eq("slug", item.slug)).unique();
+      if (!product) continue;
+      const patch: Record<string, number> = { stock: Math.max(0, product.stock - item.qty) };
+      if (product.isLimited && product.bottlesAvailable != null) {
+        patch.bottlesAvailable = Math.max(0, product.bottlesAvailable - item.qty);
+      }
+      await ctx.db.patch(product._id, patch);
+    }
+
+    // Acreditar comisión + ascenso
+    if (ambassadorId && commission > 0) {
+      const amb = await ctx.db.get(ambassadorId);
+      if (amb) {
+        await ctx.db.patch(ambassadorId, {
+          accruedCommission: amb.accruedCommission + commission,
+          salesCount: amb.salesCount + 1,
+          salesAmount: (amb.salesAmount ?? 0) + subtotal,
+          lastSaleAt: Date.now(),
+        });
+        await promoteIfEligible(ctx, ambassadorId);
+      }
+    }
+
+    // Cliente en CRM
+    await ctx.runMutation(internal.crm.upsertCustomerInternal, {
+      name: args.customerName,
+      email: args.customerEmail.trim().toLowerCase(),
+      phone: args.customerPhone,
+      total,
+      orderNumber,
+      orderAt: Date.now(),
+    });
+
+    // Correo de confirmación al cliente
+    await ctx.scheduler.runAfter(0, internal.emails.sendOrderConfirmation, {
+      to: args.customerEmail.trim().toLowerCase(),
+      customerName: args.customerName,
+      orderNumber,
+      items: args.items.map((i) => ({ name: i.name, qty: i.qty, price: i.price })),
+      subtotal, shipping: args.shipping, discount: args.discount ?? 0, total,
+      address: {
+        calle: args.shippingAddress.calle, numero: args.shippingAddress.numero,
+        colonia: args.shippingAddress.colonia, cp: args.shippingAddress.cp,
+        ciudad: args.shippingAddress.ciudad, estado: args.shippingAddress.estado,
+      },
+    });
+
+    // Aviso al dueño
+    const settings = await ctx.db.query("settings").first();
+    const ownerEmail = settings?.notifyOrdersEmail || process.env.OWNER_EMAIL || "";
+    if (ownerEmail) {
+      await ctx.scheduler.runAfter(0, internal.emails.sendOwnerNewOrder, {
+        to: ownerEmail,
+        orderNumber,
+        customerName: args.customerName,
+        customerEmail: args.customerEmail.trim().toLowerCase(),
+        customerPhone: args.customerPhone,
+        items: args.items.map((i) => ({ name: i.name, qty: i.qty, price: i.price })),
+        total,
+        couponCode: args.couponCode,
+        ambassadorCode: args.ambassadorCode,
+        city: args.shippingAddress.ciudad,
+        state: args.shippingAddress.estado,
+        isManual: true,
+      });
+    }
+
+    return { ok: true, orderNumber };
   },
 });
 
