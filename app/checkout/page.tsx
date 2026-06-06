@@ -11,7 +11,19 @@ import { STORE_CONFIG, formatMXN } from "@/lib/store-config";
 const inputClass =
   "w-full border border-gold/20 bg-obsidian/60 px-4 py-3 font-body text-sm text-ivory placeholder:text-muted/60 focus:border-gold focus:outline-none transition-colors";
 
+// Estados de México (envíos disponibles solo dentro del país)
+const ESTADOS_MX = [
+  "Aguascalientes", "Baja California", "Baja California Sur", "Campeche",
+  "Chiapas", "Chihuahua", "Ciudad de México", "Coahuila", "Colima",
+  "Durango", "Estado de México", "Guanajuato", "Guerrero", "Hidalgo",
+  "Jalisco", "Michoacán", "Morelos", "Nayarit", "Nuevo León", "Oaxaca",
+  "Puebla", "Querétaro", "Quintana Roo", "San Luis Potosí", "Sinaloa",
+  "Sonora", "Tabasco", "Tamaulipas", "Tlaxcala", "Veracruz", "Yucatán",
+  "Zacatecas",
+];
+
 interface Form {
+  pais: string;
   nombre: string;
   telefono: string;
   email: string;
@@ -25,7 +37,7 @@ interface Form {
 }
 
 const EMPTY: Form = {
-  nombre: "", telefono: "", email: "", calle: "", numero: "",
+  pais: "México", nombre: "", telefono: "", email: "", calle: "", numero: "",
   colonia: "", cp: "", ciudad: "", estado: "", referencias: "",
 };
 
@@ -40,6 +52,7 @@ export default function CheckoutPage() {
 
   const total = mounted ? subtotal() : 0;
   const freeShip = total >= STORE_CONFIG.freeShippingFrom;
+  const outsideMexico = form.pais !== "México";
 
   function set<K extends keyof Form>(k: K, v: string) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -47,6 +60,7 @@ export default function CheckoutPage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (outsideMexico) return; // Solo envíos dentro de México por ahora
 
     const productos = items
       .map((i) => `• ${i.qty}× ${i.name} — ${formatMXN(i.price * i.qty)}`)
@@ -64,7 +78,7 @@ export default function CheckoutPage() {
       `Teléfono: ${form.telefono}\n` +
       (form.email ? `Email: ${form.email}\n` : "") +
       `Dirección: ${form.calle} #${form.numero}, Col. ${form.colonia}\n` +
-      `CP ${form.cp}, ${form.ciudad}, ${form.estado}\n` +
+      `CP ${form.cp}, ${form.ciudad}, ${form.estado}, ${form.pais}\n` +
       (form.referencias ? `Referencias: ${form.referencias}\n` : "") +
       `\n¿Me confirman disponibilidad, costo de envío y forma de pago? Gracias.`;
 
@@ -125,6 +139,24 @@ export default function CheckoutPage() {
           {/* Formulario */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <h2 className="font-body text-xs uppercase tracking-[0.25em] text-gold">Datos de envío</h2>
+
+            {/* País — solo México disponible por ahora */}
+            <div>
+              <select required className={inputClass} value={form.pais} onChange={(e) => set("pais", e.target.value)}>
+                <option value="México">México 🇲🇽</option>
+                <option value="Otro">Otro país (fuera de México)</option>
+              </select>
+              {outsideMexico && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+                  <span className="mt-0.5 text-amber-400">⚠</span>
+                  <p className="font-body text-sm text-amber-200/90">
+                    Por el momento solo realizamos envíos <strong>dentro de México</strong>.
+                    Muy pronto llegaremos a más países. ¡Gracias por tu interés en NOSTERRA!
+                  </p>
+                </div>
+              )}
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <input required placeholder="Nombre completo" className={inputClass} value={form.nombre} onChange={(e) => set("nombre", e.target.value)} />
               <input required type="tel" placeholder="Teléfono / WhatsApp" className={inputClass} value={form.telefono} onChange={(e) => set("telefono", e.target.value)} />
@@ -138,16 +170,19 @@ export default function CheckoutPage() {
             <div className="grid gap-4 sm:grid-cols-3">
               <input required placeholder="C.P." className={inputClass} value={form.cp} onChange={(e) => set("cp", e.target.value)} />
               <input required placeholder="Ciudad" className={inputClass} value={form.ciudad} onChange={(e) => set("ciudad", e.target.value)} />
-              <input required placeholder="Estado" className={inputClass} value={form.estado} onChange={(e) => set("estado", e.target.value)} />
+              <select required disabled={outsideMexico} className={inputClass} value={form.estado} onChange={(e) => set("estado", e.target.value)}>
+                <option value="" disabled>Estado</option>
+                {ESTADOS_MX.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
             </div>
             <textarea rows={2} placeholder="Referencias de entrega (opcional)" className={`${inputClass} resize-none`} value={form.referencias} onChange={(e) => set("referencias", e.target.value)} />
 
-            <button type="submit" className="flex w-full items-center justify-center gap-2 bg-gold px-6 py-4 font-body text-sm uppercase tracking-[0.15em] text-obsidian transition-colors hover:bg-gold-light">
+            <button type="submit" disabled={outsideMexico} className="flex w-full items-center justify-center gap-2 bg-gold px-6 py-4 font-body text-sm uppercase tracking-[0.15em] text-obsidian transition-colors hover:bg-gold-light disabled:cursor-not-allowed disabled:opacity-40">
               <ShoppingBag className="h-4 w-4" />
-              Enviar pedido por WhatsApp
+              {outsideMexico ? "Disponible solo en México" : "Enviar pedido por WhatsApp"}
             </button>
             <p className="text-center font-body text-[11px] text-muted/60">
-              No se cobra nada en este paso. El pago se acuerda por WhatsApp.
+              Envíos solo dentro de México · No se cobra nada en este paso. El pago se acuerda por WhatsApp.
             </p>
           </form>
 
