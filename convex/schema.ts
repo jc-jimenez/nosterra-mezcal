@@ -34,6 +34,7 @@ export default defineSchema({
     whatsappNumber: v.string(),
     shippingNote: v.string(),
     freeShippingFrom: v.number(),
+    shippingCost: v.optional(v.number()), // tarifa fija de envío (MXN)
     currency: v.string(),
   }),
 

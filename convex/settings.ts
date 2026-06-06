@@ -5,6 +5,7 @@ const DEFAULTS = {
   whatsappNumber: "527775238569",
   shippingNote: "Envío a todo México · 3–5 días hábiles",
   freeShippingFrom: 1500,
+  shippingCost: 150,
   currency: "MXN",
 };
 
@@ -28,6 +29,7 @@ export const upsert = mutation({
       whatsappNumber: v.string(),
       shippingNote: v.string(),
       freeShippingFrom: v.number(),
+      shippingCost: v.number(),
       currency: v.string(),
     }),
   },

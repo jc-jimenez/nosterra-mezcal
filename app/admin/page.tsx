@@ -325,24 +325,30 @@ function SettingsCard({
   settings,
   onSave,
 }: {
-  settings: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; currency: string } | undefined;
-  onSave: (d: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; currency: string }) => Promise<void>;
+  settings: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost?: number; currency: string } | undefined;
+  onSave: (d: { whatsappNumber: string; shippingNote: string; freeShippingFrom: number; shippingCost: number; currency: string }) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [wa, setWa] = useState("");
   const [note, setNote] = useState("");
   const [free, setFree] = useState("");
+  const [cost, setCost] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (settings) { setWa(settings.whatsappNumber); setNote(settings.shippingNote); setFree(String(settings.freeShippingFrom)); }
+    if (settings) {
+      setWa(settings.whatsappNumber);
+      setNote(settings.shippingNote);
+      setFree(String(settings.freeShippingFrom));
+      setCost(String(settings.shippingCost ?? 150));
+    }
   }, [settings]);
 
   async function save() {
     setSaving(true); setSaved(false);
     try {
-      await onSave({ whatsappNumber: wa.trim(), shippingNote: note.trim(), freeShippingFrom: Number(free) || 0, currency: "MXN" });
+      await onSave({ whatsappNumber: wa.trim(), shippingNote: note.trim(), freeShippingFrom: Number(free) || 0, shippingCost: Number(cost) || 0, currency: "MXN" });
       setSaved(true); setTimeout(() => setSaved(false), 2000);
     } finally { setSaving(false); }
   }
@@ -355,8 +361,9 @@ function SettingsCard({
       </button>
       {open && (
         <div className="space-y-4 border-t border-neutral-100 px-6 py-5">
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Field label="WhatsApp (52 + 10 dígitos)"><input className={input} value={wa} onChange={(e) => setWa(e.target.value)} placeholder="527775238569" /></Field>
+            <Field label="Costo de envío (MXN)"><input type="number" className={input} value={cost} onChange={(e) => setCost(e.target.value)} /></Field>
             <Field label="Envío gratis desde (MXN)"><input type="number" className={input} value={free} onChange={(e) => setFree(e.target.value)} /></Field>
             <Field label="Nota de envío"><input className={input} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
           </div>

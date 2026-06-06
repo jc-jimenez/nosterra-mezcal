@@ -55,9 +55,10 @@ export default function CheckoutPage() {
 
   useEffect(() => setMounted(true), []);
 
-  const total = mounted ? subtotal() : 0;
-  const freeShip = total >= settings.freeShippingFrom;
-  const shippingCost = freeShip ? 0 : 0; // costo de envío se confirma aparte; 0 por ahora
+  const subtotalAmount = mounted ? subtotal() : 0;
+  const freeShip = subtotalAmount >= settings.freeShippingFrom;
+  const shippingCost = freeShip ? 0 : settings.shippingCost;
+  const total = subtotalAmount + shippingCost;
   const outsideMexico = form.pais !== "México";
 
   function set<K extends keyof Form>(k: K, v: string) {
@@ -91,9 +92,9 @@ export default function CheckoutPage() {
             calle: form.calle, numero: form.numero, colonia: form.colonia, cp: form.cp,
             ciudad: form.ciudad, estado: form.estado, pais: form.pais, referencias: form.referencias,
           },
-          subtotal: total,
+          subtotal: subtotalAmount,
           shippingCost,
-          total: total + shippingCost,
+          total,
         }),
       });
       const data = await res.json();
@@ -117,13 +118,14 @@ export default function CheckoutPage() {
       .map((i) => `• ${i.qty}× ${i.name} — ${formatMXN(i.price * i.qty)}`)
       .join("\n");
 
-    const envio = freeShip ? "GRATIS" : "por confirmar";
+    const envio = freeShip ? "GRATIS" : formatMXN(shippingCost);
 
     const msg =
       `¡Hola NOSTERRA! Quiero hacer un pedido:\n\n` +
       `*PRODUCTOS*\n${productos}\n` +
-      `Subtotal: ${formatMXN(total)}\n` +
-      `Envío: ${envio}\n\n` +
+      `Subtotal: ${formatMXN(subtotalAmount)}\n` +
+      `Envío: ${envio}\n` +
+      `Total: ${formatMXN(total)}\n\n` +
       `*DATOS DE ENVÍO*\n` +
       `Nombre: ${form.nombre}\n` +
       `Teléfono: ${form.telefono}\n` +
@@ -296,13 +298,17 @@ export default function CheckoutPage() {
             </ul>
             <div className="mt-5 space-y-2 border-t border-gold/10 pt-5 font-body text-sm">
               <div className="flex justify-between text-muted">
-                <span>Subtotal</span><span className="text-ivory">{formatMXN(total)}</span>
+                <span>Subtotal</span><span className="text-ivory">{formatMXN(subtotalAmount)}</span>
               </div>
               <div className="flex justify-between text-muted">
                 <span>Envío</span>
-                <span className={freeShip ? "text-agave-light" : "text-muted"}>
-                  {freeShip ? "Gratis" : "Por confirmar"}
+                <span className={freeShip ? "text-agave-light" : "text-ivory"}>
+                  {freeShip ? "Gratis" : formatMXN(shippingCost)}
                 </span>
+              </div>
+              <div className="flex justify-between border-t border-gold/10 pt-2 text-base">
+                <span className="text-ivory">Total</span>
+                <span className="font-display text-xl text-gold">{formatMXN(total)}</span>
               </div>
             </div>
             <p className="mt-4 flex items-center gap-1.5 font-body text-[11px] text-muted/70">
