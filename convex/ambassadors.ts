@@ -215,6 +215,28 @@ export const getAccount = query({
       .order("desc")
       .take(10);
 
+    // Referidos: ventas hechas con su código
+    const orders = await ctx.db
+      .query("orders")
+      .withIndex("by_ambassador", (q) => q.eq("ambassadorId", a._id))
+      .order("desc")
+      .take(20);
+    const referrals = orders
+      .filter((o) => o.paymentStatus === "approved" || o.status !== "pending")
+      .map((o) => {
+        // Privacidad: solo primer nombre + inicial del apellido
+        const parts = o.customerName.trim().split(/\s+/);
+        const masked = parts[0] + (parts[1] ? ` ${parts[1][0]}.` : "");
+        return {
+          customer: masked,
+          city: o.shippingAddress.ciudad,
+          amount: o.subtotal,
+          commission: o.commission ?? 0,
+          date: o._creationTime,
+          status: o.status,
+        };
+      });
+
     return {
       name: a.name, code: a.code, tier: a.tier, status: a.status, isActive: a.isActive,
       whatsapp: a.whatsapp ?? "", phone: a.phone ?? "", rfc: a.rfc ?? "", curp: a.curp ?? "",
@@ -231,6 +253,7 @@ export const getAccount = query({
         cashAmount: p.cashAmount, couponAmount: p.couponAmount, couponCode: p.couponCode ?? null,
         status: p.status, createdAt: p.createdAt,
       })),
+      referrals,
     };
   },
 });

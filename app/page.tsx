@@ -6,6 +6,7 @@ import { Tienda } from "@/components/marketing/Tienda";
 import { EdicionConmemorativa } from "@/components/marketing/EdicionConmemorativa";
 import { ProcesoArtesanal } from "@/components/marketing/ProcesoArtesanal";
 import { HistoriaSection } from "@/components/marketing/HistoriaSection";
+import { Testimonios } from "@/components/marketing/Testimonios";
 import { ContactoSection } from "@/components/marketing/ContactoSection";
 
 export default function Home() {
@@ -19,6 +20,7 @@ export default function Home() {
         <EdicionConmemorativa />
         <ProcesoArtesanal />
         <HistoriaSection />
+        <Testimonios />
         <ContactoSection />
       </main>
       <Footer />

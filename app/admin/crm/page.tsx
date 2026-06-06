@@ -7,7 +7,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import {
   Package, Users, Crown, Megaphone, ChevronLeft, ChevronDown, ChevronUp,
-  Truck, Send, StickyNote, Search, Plus, X, Trash2, MessageCircle,
+  Truck, Send, StickyNote, Search, Plus, X, Trash2, MessageCircle, Star,
 } from "lucide-react";
 
 const KEY_STORAGE = "nosterra_admin_key";
@@ -32,7 +32,7 @@ const TIER_COLOR: Record<string, string> = {
   oro: "bg-amber-100 text-amber-700",
 };
 
-type Tab = "pedidos" | "clientes" | "embajadores" | "campanas";
+type Tab = "pedidos" | "clientes" | "embajadores" | "campanas" | "resenas";
 
 export default function CrmPage() {
   const [adminKey, setAdminKey] = useState<string | null>(null);
@@ -59,6 +59,7 @@ export default function CrmPage() {
     { id: "clientes", label: "Clientes", icon: Users },
     { id: "embajadores", label: "Embajadores", icon: Crown },
     { id: "campanas", label: "Campañas", icon: Megaphone },
+    { id: "resenas", label: "Reseñas", icon: Star },
   ];
 
   return (
@@ -84,6 +85,7 @@ export default function CrmPage() {
         {tab === "clientes" && <ClientesTab adminKey={adminKey} />}
         {tab === "embajadores" && <EmbajadoresTab adminKey={adminKey} />}
         {tab === "campanas" && <CampanasTab adminKey={adminKey} />}
+        {tab === "resenas" && <ResenasTab adminKey={adminKey} />}
       </main>
     </div>
   );
@@ -834,6 +836,89 @@ function CampanasTab({ adminKey }: { adminKey: string }) {
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── RESEÑAS ─────────────────────────────────────────────────────────────────
+
+function ResenasTab({ adminKey }: { adminKey: string }) {
+  const reviews = useQuery(api.reviews.listAll, { adminKey });
+  const moderate = useMutation(api.reviews.moderate);
+  const toggleFeatured = useMutation(api.reviews.toggleFeatured);
+  const remove = useMutation(api.reviews.remove);
+  const adminCreate = useMutation(api.reviews.adminCreate);
+  const [filter, setFilter] = useState<string>("pending");
+  const [showNew, setShowNew] = useState(false);
+  const [nName, setNName] = useState(""); const [nRating, setNRating] = useState(5); const [nComment, setNComment] = useState("");
+
+  const filtered = (reviews ?? []).filter((r) => filter === "all" || r.status === filter);
+  const pendingCount = (reviews ?? []).filter((r) => r.status === "pending").length;
+
+  async function createTestimonial() {
+    if (!nName.trim() || !nComment.trim()) return;
+    await adminCreate({ adminKey, name: nName, rating: nRating, comment: nComment, featured: true });
+    setNName(""); setNComment(""); setNRating(5); setShowNew(false);
+  }
+
+  const STATUS = { pending: "Pendiente", approved: "Publicada", rejected: "Rechazada" } as const;
+  const COLOR = { pending: "bg-amber-100 text-amber-700", approved: "bg-emerald-100 text-emerald-700", rejected: "bg-red-100 text-red-600" } as const;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-1">
+          {[["pending", `Pendientes${pendingCount ? ` (${pendingCount})` : ""}`], ["approved", "Publicadas"], ["rejected", "Rechazadas"], ["all", "Todas"]].map(([id, label]) => (
+            <button key={id} onClick={() => setFilter(id)} className={`rounded-full px-3 py-1 text-xs font-medium ${filter === id ? "bg-amber-600 text-white" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"}`}>{label}</button>
+          ))}
+        </div>
+        <button onClick={() => setShowNew((v) => !v)} className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"><Plus className="h-4 w-4" /> Testimonio</button>
+      </div>
+
+      {showNew && (
+        <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-5">
+          <p className="text-sm font-medium text-neutral-900">Nuevo testimonio (se publica destacado)</p>
+          <input className={input} placeholder="Nombre" value={nName} onChange={(e) => setNName(e.target.value)} />
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-neutral-500">Calificación:</span>
+            {[1, 2, 3, 4, 5].map((n) => <button key={n} onClick={() => setNRating(n)}><Star className={`h-5 w-5 ${n <= nRating ? "fill-amber-500 text-amber-500" : "text-neutral-300"}`} /></button>)}
+          </div>
+          <textarea rows={3} className={`${input} resize-none`} placeholder="Comentario" value={nComment} onChange={(e) => setNComment(e.target.value)} />
+          <button onClick={createTestimonial} className="rounded-lg bg-neutral-900 px-5 py-2 text-sm font-medium text-white hover:bg-neutral-800">Publicar</button>
+        </div>
+      )}
+
+      {reviews === undefined ? (
+        <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="h-20 animate-pulse rounded-xl bg-neutral-100" />)}</div>
+      ) : filtered.length === 0 ? (
+        <p className="rounded-xl border border-neutral-200 bg-white py-12 text-center text-sm text-neutral-500">Sin reseñas con ese filtro.</p>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((r) => (
+            <div key={r._id} className="rounded-xl border border-neutral-200 bg-white p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-neutral-900">{r.name}</p>
+                    <div className="flex">{[1, 2, 3, 4, 5].map((n) => <Star key={n} className={`h-3.5 w-3.5 ${n <= r.rating ? "fill-amber-500 text-amber-500" : "text-neutral-300"}`} />)}</div>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${COLOR[r.status]}`}>{STATUS[r.status]}</span>
+                    {r.featured && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">★ Destacada</span>}
+                    {r.productSlug && <span className="text-[11px] text-neutral-400">· {r.productSlug}</span>}
+                  </div>
+                  <p className="mt-1.5 text-sm text-neutral-700">{r.comment}</p>
+                  <p className="mt-1 text-[11px] text-neutral-400">{new Date(r.createdAt).toLocaleString("es-MX")}</p>
+                </div>
+                <button onClick={() => { if (confirm("¿Eliminar reseña?")) remove({ adminKey, id: r._id }); }} className="text-neutral-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2 border-t border-neutral-100 pt-3">
+                {r.status !== "approved" && <button onClick={() => moderate({ adminKey, id: r._id, status: "approved" })} className="rounded-md bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700">Publicar</button>}
+                {r.status !== "rejected" && <button onClick={() => moderate({ adminKey, id: r._id, status: "rejected" })} className="rounded-md border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:bg-neutral-50">Rechazar</button>}
+                {r.status === "approved" && <button onClick={() => toggleFeatured({ adminKey, id: r._id, featured: !r.featured })} className="rounded-md border border-amber-300 px-3 py-1 text-xs text-amber-700 hover:bg-amber-50">{r.featured ? "Quitar de destacadas" : "Destacar en inicio"}</button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

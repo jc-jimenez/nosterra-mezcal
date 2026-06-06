@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { ShoppingBag, Check } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -72,7 +73,7 @@ export function Tienda() {
                       <p className="font-body text-[11px] uppercase tracking-[0.2em] text-gold">
                         {p.tagline}
                       </p>
-                      <h3 className="mt-1.5 font-display text-2xl text-ivory">{p.name}</h3>
+                      <Link href={`/productos/${p.slug}`} className="mt-1.5 block font-display text-2xl text-ivory transition-colors hover:text-gold">{p.name}</Link>
                       <p className="mt-3 font-body text-sm leading-relaxed text-muted line-clamp-3">
                         {p.description}
                       </p>
@@ -95,6 +96,9 @@ export function Tienda() {
                         <p className="font-display text-3xl font-light text-ivory">
                           {formatMXN(p.price)}
                         </p>
+                        <Link href={`/productos/${p.slug}`} className="font-body text-xs uppercase tracking-wide text-gold hover:text-gold-light">
+                          Ver detalle →
+                        </Link>
                       </div>
 
                       <div className="mt-4">

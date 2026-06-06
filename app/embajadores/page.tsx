@@ -325,6 +325,18 @@ function AccountPanel() {
             </button>
           </div>
 
+          {/* Compartir por WhatsApp */}
+          {account.isActive && (
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`¡Prueba NOSTERRA Mezcal! 🥃 Usa mi código ${account.code} y obtén ${account.customerDiscountPct}% de descuento en tu compra. Pídelo aquí: https://www.nosterramezcal.com`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 font-body text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20"
+            >
+              <MessageCircle className="h-4 w-4" /> Compartir mi código por WhatsApp
+            </a>
+          )}
+
           <div className="grid grid-cols-3 gap-3 text-center">
             <Stat label="Nivel" value={TIER_LABEL[account.tier] ?? account.tier} />
             <Stat label="Ventas" value={String(account.salesCount)} />
@@ -379,6 +391,21 @@ function AccountPanel() {
             </p>
           )}
           {redeemErr && <p className="font-body text-sm text-red-300">{redeemErr}</p>}
+
+          {/* Referidos: tus ventas */}
+          {account.referrals.length > 0 && (
+            <div className="rounded-xl border border-gold/10 bg-smoke px-4 py-3">
+              <p className="mb-2 font-body text-[11px] uppercase tracking-wide text-muted">Tus ventas ({account.referrals.length})</p>
+              <ul className="space-y-1.5">
+                {account.referrals.map((r, i) => (
+                  <li key={i} className="flex items-center justify-between font-body text-xs">
+                    <span className="text-muted">{r.customer} · {r.city}</span>
+                    <span className="text-ivory">${r.amount.toLocaleString("es-MX")} <span className="text-gold">(+${r.commission.toLocaleString("es-MX")})</span></span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Historial de pagos en efectivo */}
           {account.payouts.length > 0 && (

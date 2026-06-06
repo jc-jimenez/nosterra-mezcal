@@ -230,7 +230,21 @@ export default defineSchema({
   })
     .index("by_order_number", ["orderNumber"])
     .index("by_email", ["customerEmail"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_ambassador", ["ambassadorId"]),
+
+  // Reseñas / testimonios de clientes
+  reviews: defineTable({
+    productSlug: v.optional(v.string()), // vacío = testimonio general
+    name: v.string(),
+    rating: v.number(), // 1 a 5
+    comment: v.string(),
+    status: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected")),
+    featured: v.optional(v.boolean()), // se muestra en la página principal
+    createdAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_product", ["productSlug"]),
 
   // Campañas de motivación a embajadores (correos masivos)
   campaigns: defineTable({
